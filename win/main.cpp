@@ -14,8 +14,6 @@
 // global variables
 LONG 				g_threadCount = 0;
 UINT				g_Quit = 0;
-UINT				g_DotsPerInch = XWIN_DEFAULT_DPI;
-ID2D1Factory*		g_pD2DFactory = nullptr;
 AppMode				g_Mode = modeTalk;
 HINSTANCE			g_hInstance = nullptr;
 
@@ -144,6 +142,7 @@ public:
 static int InitInstance(HINSTANCE hInstance)
 {
 	int iRet = 0;
+#if 0	
 	HRESULT hr = S_OK;
 	
 	g_DotsPerInch = XWIN_DEFAULT_DPI;
@@ -155,7 +154,7 @@ static int InitInstance(HINSTANCE hInstance)
 		MessageBox(NULL, _T("The calling of D2D1CreateFactory() is failed"), _T("WoChat Error"), MB_OK);
 		return (-1);
 	}
-
+#endif
 	return iRet;
 }
 
@@ -166,7 +165,7 @@ static void ExitInstance(HINSTANCE hInstance)
 	// tell all threads to quit
 	InterlockedIncrement(&g_Quit);
 
-	SafeRelease(&g_pD2DFactory);
+	//SafeRelease(&g_pD2DFactory);
 
 	// wait for all threads to quit gracefully
 	tries = 10;

@@ -58,15 +58,6 @@
 #define WOCHAT_ALIGN_DEFAULT64(size)	WOCHAT_ALIGN(size, 8)		/** Default alignment */
 #define WOCHAT_ALIGN_PAGE(size)		    WOCHAT_ALIGN(size, 1<<16)
 
-template <class T> void SafeRelease(T** ppT)
-{
-	if (nullptr != *ppT)
-	{
-		(*ppT)->Release();
-		*ppT = nullptr;
-	}
-}
-
 typedef enum
 {
 	modeMe = 0,
