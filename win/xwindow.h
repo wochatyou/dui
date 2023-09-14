@@ -47,22 +47,55 @@
 
 
 // Splitter panes constants
-#define SPLIT_OVER_NONE_BAR			0
-#define SPLIT_OVER_VERTICAL_BAR		1
-#define SPLIT_OVER_HORIZONAL_BAR	2
+#define SPLIT_PANE_LEFT			 0
+#define SPLIT_PANE_RIGHT		 1
+#define SPLIT_PANE_TOP			 SPLIT_PANE_LEFT
+#define SPLIT_PANE_BOTTOM		 SPLIT_PANE_RIGHT
+#define SPLIT_PANE_NONE			-1
+
+// Splitter extended styles
+#define SPLIT_PROPORTIONAL		0x00000001
+#define SPLIT_NONINTERACTIVE		0x00000002
+#define SPLIT_RIGHTALIGNED		0x00000004
+#define SPLIT_BOTTOMALIGNED		SPLIT_RIGHTALIGNED
+#define SPLIT_GRADIENTBAR		0x00000008
+#define SPLIT_FLATBAR			0x00000020
+#define SPLIT_FIXEDBARSIZE		0x00000010
+
+// Note: SPLIT_PROPORTIONAL and SPLIT_RIGHTALIGNED/SPLIT_BOTTOMALIGNED are 
+// mutually exclusive. If both are set, splitter defaults to SPLIT_PROPORTIONAL.
+// Also, SPLIT_FLATBAR overrides SPLIT_GRADIENTBAR if both are set.
+
 
 class XWindow : public ATL::CWindowImpl<XWindow>
 {
 public:
 	DECLARE_XWND_CLASS(NULL, IDR_MAINFRAME, 0)
 
-	XWindow() 
-	{
-	}
+	XWindow() {}
 
-	~XWindow()
-	{
-	}
+	~XWindow() {}
+
+	enum { m_nPanesCount = 2, m_nPropMax = INT_MAX, m_cxyStep = 10 };
+
+	bool m_bVertical;
+	RECT m_rcSplitter;
+	int m_xySplitterPos;            // splitter bar position
+	int m_xySplitterPosNew;         // internal - new position while moving
+	int m_nDefActivePane;
+	int m_cxySplitBar;              // splitter bar width/height
+	HCURSOR m_hCursor;
+	int m_cxyMin;                   // minimum pane size
+	int m_cxyBarEdge;              	// splitter bar edge
+	bool m_bFullDrag;
+	int m_cxyDragOffset;		// internal
+	int m_nProportionalPos;
+	bool m_bUpdateProportionalPos;
+	DWORD m_dwExtendedStyle;        // splitter specific extended styles
+	int m_nSinglePane;              // single pane mode
+	int m_xySplitterDefPos;         // default position
+	bool m_bProportionalDefPos;     // porportinal def pos
+
 
 	BEGIN_MSG_MAP(XWindow)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
