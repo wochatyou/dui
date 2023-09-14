@@ -42,11 +42,6 @@
 #include <cassert>
 #include <string>
 
-#include "akelpad/AkelBuild.h"
-#include "dui/duiscreen.h"
-#include "blend2d/src/blend2d.h"
-#include "utils/mempool.h"
-
 #define S8      int8_t
 #define S16     int16_t
 #define S32     int32_t
@@ -72,54 +67,6 @@ template <class T> void SafeRelease(T** ppT)
 	}
 }
 
-typedef union XTimeStamp
-{
-	U8   data_[8];
-	U64  timestamp_;  // the time stamp. 
-} XTimeStamp;
-
-typedef struct XChatMessage
-{
-	XChatMessage* next_;
-	U32* icon_;        // the bitmap data of this icon
-	U8   w_;           // the width in pixel of this icon
-	U8   h_;           // the height in pixel of this icon
-	U16  height_;	   // in pixel
-	U16  state_;
-	U16  msgLen_;
-	XTimeStamp  ts_;  // the time stamp. 
-	U16* name_;       // The name of this people      
-	U16* message_;    // real message
-	U8* obj_;         // point to GIF/APNG/Video/Pic etc
-} XChatMessage;
-
-typedef struct XChatGroup
-{
-	XChatGroup* next_;
-	U16  id_;				// Group ID
-	U32* icon_;				// the bitmap data of this icon
-	U8   w_;				// the width in pixel of this icon
-	U8   h_;				// the height in pixel of this icon
-	U16  height_;			// in pixel
-	U16  unread_;			// how many unread messages? if more than 254, use ... 
-	U16  member_;			// how many members in this group?
-	U16* name_;				// the group name
-	XTimeStamp  ts_;		// the time stamp. 
-	U16* lastmsg_;			// the last message of this group
-	XChatMessage* message_; // The list of the message in this group
-	XChatMessage* msgTail_; // The last message in this group;
-	MemoryContext mempool_; // The memory pool of this group
-} XChatGroup;
-
-typedef struct XMQTTMessage
-{
-	char* host;
-	int port;
-	char* topic;
-	char* message;
-	int msglen;
-} XMQTTMessage;
-
 typedef enum
 {
 	modeMe = 0,
@@ -136,8 +83,6 @@ extern UINT				g_Quit;
 extern UINT				g_DotsPerInch;
 extern LONG				g_threadCount;
 extern ID2D1Factory*	g_pD2DFactory;
-extern BLFontFace		g_fontFace;
-extern LOGFONTW         g_logFont;
 extern HINSTANCE		g_hInstance;
 
 #endif  /* __WOCHAT_H__ */
