@@ -37,8 +37,6 @@ public:
 		if (FALSE == winMain.IsWindow())
 			goto ExitMainUIThread;
 
-		g_DotsPerInch = GetDpiForWindow(winMain.m_hWnd);
-
 		//winMain.CenterWindow();
 		winMain.ShowWindow(SW_SHOW);
 
