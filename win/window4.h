@@ -39,17 +39,16 @@ public:
 	{
 		int ret = 0;
 
+		m_sizeAll.cy = 3000;
+		m_sizeLine.cy = 128;
+
 		return 0;
 	}
 
 	int DoSize(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
 		int h = m_area.bottom - m_area.top;
-		if (m_totalHeight < 0)
-			m_totalHeight = h;
-
-		if (m_vscrollOffset < 0)
-			m_vscrollOffset = m_totalHeight - h;
+		m_ptOffset.y = m_sizeAll.cy - h;
 
 		return 0;
 	}

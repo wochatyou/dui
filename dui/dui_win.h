@@ -9,6 +9,27 @@
 #define DUI_NO_VTABLE
 #endif
 
+typedef struct tagXPOINT
+{
+	int  x;
+	int  y;
+} XPOINT;
+
+typedef struct tagXSIZE
+{
+	int  cx;
+	int  cy;
+} XSIZE;
+
+typedef struct tagXRECT
+{
+	int    left;
+	int    top;
+	int    right;
+	int    bottom;
+} XRECT;
+
+
 // a pure 32-bit true color bitmap object
 typedef struct XBitmap
 {
@@ -90,13 +111,20 @@ public:
 	U32*    m_screen = nullptr;
 	U32		m_size = 0;
 	U8      m_Id;
-	RECT	m_area = { 0 };
+	XRECT   m_area = { 0 };
 
 	int     m_buttonStartIdx = 0;
 	int     m_buttonEndIdx = -1;
 	int     m_buttonActiveIdx = -1;
 
 	int     m_scrollWidth = 8; // in pixel
+
+	XPOINT m_ptOffset = { 0 };
+	XSIZE  m_sizeAll = { 0 };
+	XSIZE  m_sizeLine = { 0 };
+	XSIZE  m_sizePage = { 0 };
+
+	bool   m_InDragMode = false;
 
 #ifdef _WIN32
 	HCURSOR  m_cursorHand = nullptr;
@@ -118,10 +146,6 @@ public:
 
 	U8	m_status = DUI_STATUS_VISIBLE;
 	U8  m_property = DUI_PROP_NONE;
-	
-	int m_totalHeight = -1;
-	int m_vscrollOffset = -1;
-	int m_vscrollStep = 1;
 
 public:
 	XWindowT()
@@ -178,6 +202,11 @@ public:
 		return (0 != (m_status & DUI_STATUS_VISIBLE));
 	}
 
+	XRECT* GetWindowArea()
+	{
+		return &m_area;
+	}
+
 	void PostWindowHide() {}
 	void WindowHide()
 	{
@@ -197,7 +226,7 @@ public:
 
 	int NotifyParent(U32 uMsg, U64 wParam, U64 lParam)
 	{
-		PostMessage(uMsg, wParam, lParam);
+		PostWindowMessage(uMsg, wParam, lParam);
 		return 0;
 	}
 
@@ -233,7 +262,33 @@ public:
 		return m_screen;
 	}
 
-	bool PostMessage(U32 message, U64 wParam = 0, U64 lParam = 0)
+#if 0
+	void* SetWindowCapture()
+	{
+		void* winhandle = nullptr;
+		assert(IsRealWindow(m_hWnd));
+		if (IsRealWindow(m_hWnd))
+		{
+#if defined(_WIN32)
+			winhandle = ::SetCapture((HWND)m_hWnd);
+#endif
+		}
+		return winhandle;
+	}
+
+	void* GetWindowCapture()
+	{
+		void* winhandle = nullptr;
+		assert(IsRealWindow(m_hWnd));
+
+#if defined(_WIN32)
+		winhandle = ::GetCapture();
+#endif
+		return winhandle;
+	}
+#endif
+
+	bool PostWindowMessage(U32 message, U64 wParam = 0, U64 lParam = 0)
 	{
 		bool bRet = false;
 
@@ -339,19 +394,16 @@ public:
 			// fill the whole screen of this virutal window with a single color
 			ScreenClear(m_screen, m_size, m_backgroundColor);
 
-			if (DUI_STATUS_VSCROLL & m_status)
+			if (DUI_STATUS_VSCROLL & m_status) // We have the vertical scroll bar to draw
 			{
-				assert(m_totalHeight > h);
-				// We have the vertical scroll bar to draw
 				int thumb_start, thumb_height, thumb_width;
+				int vOffset = m_ptOffset.y;
+				int vHeight = m_sizeAll.cy;
+				assert(m_sizeAll.cy > h);
 
-				double tmp;
 				thumb_width = m_scrollWidth - 2;
-				tmp = ((double)m_vscrollOffset * (double)h) / ((double)m_totalHeight);
-				thumb_start = (int)tmp;
-				tmp = (double)h;
-				tmp = ((double)h * tmp) / ((double)m_totalHeight);
-				thumb_height = (int)tmp;
+				thumb_start = (vOffset * h) / vHeight;
+				thumb_height = (h * h) / vHeight;
 
 				// Draw the vertical scroll bar
 				ScreenFillRect(m_screen, w, h, m_scrollbarColor, m_scrollWidth, h, w - m_scrollWidth, 0);
@@ -443,8 +495,17 @@ public:
 
 				if (xPos >= (m_area.right - m_scrollWidth))
 				{
-					if (m_totalHeight > h)
+					if (m_sizeAll.cy > h)
+					{
+						int thumb_start = (m_ptOffset.y * h) / m_sizeAll.cy;
+						int thumb_height = (h * h) / m_sizeAll.cy;
 						m_status |= DUI_STATUS_VSCROLL;
+						if (m_InDragMode)
+						{
+							int y = yPos -= m_area.top;
+							int offset = y - thumb_start;
+						}
+					}
 				}
 				if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
 					r0 = DUI_STATUS_NEEDRAW;
@@ -524,6 +585,8 @@ public:
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
 
+		m_InDragMode = false;
+
 		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
 		{
 			button = &m_button[i];
@@ -553,26 +616,34 @@ public:
 
 				if (xPos >= (m_area.right - m_scrollWidth))
 				{
-					if (m_totalHeight > h)
+					if (m_sizeAll.cy > h)
 					{
 						m_status |= DUI_STATUS_VSCROLL;
-						thumb_start = (m_vscrollOffset * h) / m_totalHeight;
-						thumb_height = (h * h) / m_totalHeight;
+						thumb_start = (m_ptOffset.y * h) / m_sizeAll.cy;
+						thumb_height = (h * h) / m_sizeAll.cy;
 						if (yPos < (m_area.top + thumb_start))
 						{
-							m_vscrollOffset -= m_vscrollStep;
+							assert(m_sizeLine.cy > 0);
+							m_ptOffset.y -= m_sizeLine.cy;
 							r0 = DUI_STATUS_NEEDRAW;
-						}
-						if (yPos > (m_area.top + thumb_start + thumb_height))
+						} 
+						else if (yPos > (m_area.top + thumb_start + thumb_height))
 						{
-							m_vscrollOffset += m_vscrollStep;
+							assert(m_sizeLine.cy > 0);
+							m_ptOffset.y += m_sizeLine.cy;
 							r0 = DUI_STATUS_NEEDRAW;
 						}
-						if (m_vscrollOffset < 0)
-							m_vscrollOffset = 0;
-						if (m_vscrollOffset > (m_totalHeight - h))
-							m_vscrollOffset = m_totalHeight - h;
+						else // we hit the thumb
+						{
+							m_InDragMode = true;
+						}
 
+						if (m_ptOffset.y < 0)
+							m_ptOffset.y = 0;
+						if (m_ptOffset.y > (m_sizeAll.cy - h))
+							m_ptOffset.y = m_sizeAll.cy - h;
+
+						m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 						return DUI_STATUS_NEEDRAW;
 					}
 
@@ -609,7 +680,7 @@ public:
 			else
 			{	// if the mouse does not hit the button, we can move the whole real window
 				if (DUI_PROP_MOVEWIN & m_property)
-					PostMessage(WM_NCLBUTTONDOWN, HTCAPTION, lParam);
+					PostWindowMessage(WM_NCLBUTTONDOWN, HTCAPTION, lParam);
 			}
 		}
 
@@ -643,10 +714,11 @@ public:
 	{
 		int r0 = DUI_STATUS_NODRAW;
 		int r1 = DUI_STATUS_NODRAW;
-
 		XButton* button;
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
+
+		m_InDragMode = false;
 
 		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
 		{

@@ -76,7 +76,11 @@ ID2D1Factory*		g_pD2DFactory = nullptr;
 class XWindow : public ATL::CWindowImpl<XWindow>
 {
 private:
-	enum { m_nPanesCount = 2, m_nPropMax = INT_MAX, m_cxyStep = 1, SPLITLINE_WIDTH = 2, INIT_VPOS = 160 };
+	enum { 
+		m_nPanesCount = 2, m_nPropMax = INT_MAX, m_cxyStep = 1, 
+		SPLITLINE_WIDTH = 2, 
+		INIT_VPOS = XWIN0_WIDTH + XWIN1_WIDTH
+	};
 
 	// the memory to hold the context to paint to the screen
 	U32* m_screenBuff = nullptr;
@@ -124,13 +128,6 @@ private:
 	XWindow3 m_win3;
 	XWindow4 m_win4;
 	XWindow5 m_win5;
-
-	RECT m_rect0 = { 0 };
-	RECT m_rect1 = { 0 };
-	RECT m_rect2 = { 0 };
-	RECT m_rect3 = { 0 };
-	RECT m_rect4 = { 0 };
-	RECT m_rect5 = { 0 };
 
 	ID2D1HwndRenderTarget* m_pD2DRenderTarget = nullptr;
 	ID2D1Bitmap*           m_pixelBitmap = nullptr;
@@ -227,9 +224,9 @@ public:
 		r0 = m_win0.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
 		r1 = m_win1.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
 		r2 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r3 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r4 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r5 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r3 = m_win3.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r4 = m_win4.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r5 = m_win5.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
 
 		if (0 != r0 || 0 != r1 || 0 != r2)
 		{
@@ -351,9 +348,9 @@ public:
 		{
 			U32* dst = m_screenBuff;
 			U32 size;
-			RECT* r;
+			RECT area;
+			RECT* r =&area;
 
-			r = &m_rect0;
 			r->left = m_rectClient.left;
 			r->right = XWIN0_WIDTH;
 			r->top = m_rectClient.top;
@@ -362,7 +359,6 @@ public:
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
 			dst += size;
 
-			r = &m_rect1;
 			r->left = XWIN0_WIDTH;
 			r->right = m_splitterVPos;
 			r->top = m_rectClient.top;
@@ -371,7 +367,6 @@ public:
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
 			dst += size;
 
-			r = &m_rect2;
 			r->left = XWIN0_WIDTH;
 			r->right = m_splitterVPos;
 			r->top = m_splitterHPos0 + SPLITLINE_WIDTH;
@@ -380,7 +375,6 @@ public:
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
 			dst += size;
 
-			r = &m_rect3;
 			r->left = m_splitterVPos + SPLITLINE_WIDTH;
 			r->right = m_rectClient.right;
 			r->top = m_rectClient.top;
@@ -389,7 +383,6 @@ public:
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
 			dst += size;
 
-			r = &m_rect4;
 			r->left = m_splitterVPos + SPLITLINE_WIDTH;
 			r->right = m_rectClient.right;
 			r->top = m_splitterHPos1 + SPLITLINE_WIDTH;
@@ -398,7 +391,6 @@ public:
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
 			dst += size;
 
-			r = &m_rect5;
 			r->left = m_splitterVPos + SPLITLINE_WIDTH;
 			r->right = m_rectClient.right;
 			r->top = m_splitterHPos + SPLITLINE_WIDTH;
@@ -438,37 +430,42 @@ public:
 			}
 			{
 				// window 0 does not need to change
-				RECT* r = &m_rect0;
+				RECT area;
+				XRECT* xr = m_win0.GetWindowArea();
+
+				area.left = xr->left;  area.top = xr->top; area.right = xr->right; area.bottom = xr->bottom;
+				RECT* r = &area;
+
 				U32* dst = m_screenBuff;
 				U32 size = (U32)((r->right - r->left) * (r->bottom - r->top));
+				dst += size;
 
 				// windows 1
-				dst += size;
-				r = &m_rect1; r->left = XWIN0_WIDTH; r->right = newSplitPosV; r->top = m_rectClient.top; r->bottom = m_splitterHPos0;
+				r->left = r->right; r->right = newSplitPosV; r->top = m_rectClient.top; r->bottom = m_splitterHPos0;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win1.SetPosition(r, dst, size);
+				dst += size;
 
 				// windows 2
-				dst += size;
-				r = &m_rect2; r->left = XWIN0_WIDTH; r->right = newSplitPosV; r->top = m_splitterHPos0 + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
+				r->top = m_splitterHPos0 + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win2.SetPosition(r, dst, size);
 
 				// windows 3
 				dst += size;
-				r = &m_rect3; r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_rectClient.top; r->bottom = m_splitterHPos1;
+				r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_rectClient.top; r->bottom = m_splitterHPos1;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win3.SetPosition(r, dst, size);
 
 				// windows 4
 				dst += size;
-				r = &m_rect4; r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_splitterHPos1 + SPLITLINE_WIDTH; r->bottom = m_splitterHPos;
+				r->top = m_splitterHPos1 + SPLITLINE_WIDTH; r->bottom = m_splitterHPos;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win4.SetPosition(r, dst, size);
 
 				// windows 5
 				dst += size;
-				r = &m_rect5; r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_splitterHPos + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
+				r->top = m_splitterHPos + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win5.SetPosition(r, dst, size);
 			}
@@ -562,8 +559,6 @@ public:
 
 	LRESULT OnLButtonDoubleClick(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
 	{
-		SetSplitterPos();   // default
-
 		return 0;
 	}
 
@@ -716,7 +711,7 @@ public:
 			hr = g_pD2DFactory->CreateHwndRenderTarget(renderTargetProperties, hwndRenderTragetproperties, &m_pD2DRenderTarget);
 			if (S_OK == hr && nullptr != m_pD2DRenderTarget)
 			{
-				U32 pixel[1] = { 0xFFDDDDDD };
+				U32 pixel[1] = { 0xFFEEEEEE };
 				SafeRelease(&m_pixelBitmap);
 				hr = m_pD2DRenderTarget->CreateBitmap(
 					D2D1::SizeU(1, 1), pixel, 4, D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)),
@@ -728,7 +723,8 @@ public:
 		{
 			int w, h;
 			U32* src = nullptr;
-			RECT* r = nullptr;
+			RECT area;
+			RECT* r = &area;
 
 			m_pD2DRenderTarget->BeginDraw();
 			////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -753,7 +749,7 @@ public:
 					D2D1_RECT_F rect = D2D1::RectF(
 						static_cast<FLOAT>(XWIN0_WIDTH),
 						static_cast<FLOAT>(m_splitterHPos0),
-						static_cast<FLOAT>(m_splitterVPos), // m_cxySplitBar),
+						static_cast<FLOAT>(m_splitterVPos),
 						static_cast<FLOAT>(m_splitterHPos0 + SPLITLINE_WIDTH)
 					);
 					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
@@ -762,9 +758,9 @@ public:
 				if (m_splitterHPos1 > 0)
 				{
 					D2D1_RECT_F rect = D2D1::RectF(
-						static_cast<FLOAT>(m_splitterVPos),
+						static_cast<FLOAT>(m_splitterVPos + SPLITLINE_WIDTH),
+						static_cast<FLOAT>(m_splitterHPos1),
 						static_cast<FLOAT>(m_rectClient.right),
-						static_cast<FLOAT>(m_splitterHPos1), // m_cxySplitBar),
 						static_cast<FLOAT>(m_splitterHPos1 + SPLITLINE_WIDTH)
 					);
 					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
@@ -773,9 +769,9 @@ public:
 				if (m_splitterHPos > 0)
 				{
 					D2D1_RECT_F rect = D2D1::RectF(
-						static_cast<FLOAT>(m_splitterVPos),
+						static_cast<FLOAT>(m_splitterVPos + SPLITLINE_WIDTH),
+						static_cast<FLOAT>(m_splitterHPos),
 						static_cast<FLOAT>(m_rectClient.right),
-						static_cast<FLOAT>(m_splitterHPos), // m_cxySplitBar),
 						static_cast<FLOAT>(m_splitterHPos + SPLITLINE_WIDTH)
 					);
 					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
@@ -787,12 +783,13 @@ public:
 			if (nullptr != src)
 			{
 				ID2D1Bitmap* pBitmap = nullptr;
-				r = &m_rect0; w = r->right - r->left; h = r->bottom - r->top;
+				XRECT* xr = m_win0.GetWindowArea();
+				w = xr->right - xr->left; h = xr->bottom - xr->top;
 				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
 				if (S_OK == hr && nullptr != pBitmap)
 				{
-					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(xr->left), static_cast<FLOAT>(xr->top), static_cast<FLOAT>(xr->right), static_cast<FLOAT>(xr->bottom));
 					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
 				}
 				SafeRelease(&pBitmap);
@@ -803,12 +800,13 @@ public:
 			if (nullptr != src)
 			{
 				ID2D1Bitmap* pBitmap = nullptr;
-				r = &m_rect1; w = r->right - r->left; h = r->bottom - r->top;
+				XRECT* xr = m_win1.GetWindowArea();
+				w = xr->right - xr->left; h = xr->bottom - xr->top;
 				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
 				if (S_OK == hr && nullptr != pBitmap)
 				{
-					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(xr->left), static_cast<FLOAT>(xr->top), static_cast<FLOAT>(xr->right), static_cast<FLOAT>(xr->bottom));
 					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
 				}
 				SafeRelease(&pBitmap);
@@ -819,12 +817,13 @@ public:
 			if (nullptr != src)
 			{
 				ID2D1Bitmap* pBitmap = nullptr;
-				r = &m_rect2; w = r->right - r->left; h = r->bottom - r->top;
+				XRECT* xr = m_win2.GetWindowArea();
+				w = xr->right - xr->left; h = xr->bottom - xr->top;
 				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
 				if (S_OK == hr && nullptr != pBitmap)
 				{
-					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(xr->left), static_cast<FLOAT>(xr->top), static_cast<FLOAT>(xr->right), static_cast<FLOAT>(xr->bottom));
 					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
 				}
 				SafeRelease(&pBitmap);
@@ -835,12 +834,13 @@ public:
 			if (nullptr != src)
 			{
 				ID2D1Bitmap* pBitmap = nullptr;
-				r = &m_rect3; w = r->right - r->left; h = r->bottom - r->top;
+				XRECT* xr = m_win3.GetWindowArea();
+				w = xr->right - xr->left; h = xr->bottom - xr->top;
 				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
 				if (S_OK == hr && nullptr != pBitmap)
 				{
-					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(xr->left), static_cast<FLOAT>(xr->top), static_cast<FLOAT>(xr->right), static_cast<FLOAT>(xr->bottom));
 					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
 				}
 				SafeRelease(&pBitmap);
@@ -851,12 +851,13 @@ public:
 			if (nullptr != src)
 			{
 				ID2D1Bitmap* pBitmap = nullptr;
-				r = &m_rect4; w = r->right - r->left; h = r->bottom - r->top;
+				XRECT* xr = m_win4.GetWindowArea();
+				w = xr->right - xr->left; h = xr->bottom - xr->top;
 				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
 				if (S_OK == hr && nullptr != pBitmap)
 				{
-					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(xr->left), static_cast<FLOAT>(xr->top), static_cast<FLOAT>(xr->right), static_cast<FLOAT>(xr->bottom));
 					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
 				}
 				SafeRelease(&pBitmap);
@@ -867,12 +868,13 @@ public:
 			if (nullptr != src)
 			{
 				ID2D1Bitmap* pBitmap = nullptr;
-				r = &m_rect5; w = r->right - r->left; h = r->bottom - r->top;
+				XRECT* xr = m_win5.GetWindowArea();
+				w = xr->right - xr->left; h = xr->bottom - xr->top;
 				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
 					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
 				if (S_OK == hr && nullptr != pBitmap)
 				{
-					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(xr->left), static_cast<FLOAT>(xr->top), static_cast<FLOAT>(xr->right), static_cast<FLOAT>(xr->bottom));
 					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
 				}
 				SafeRelease(&pBitmap);

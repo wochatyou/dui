@@ -133,6 +133,8 @@ public:
 	int DoCreate(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{ 
 		int ret = 0;
+		m_sizeAll.cy = 4096;
+		m_sizeLine.cy = 100;
 		return ret; 
 	}
 
