@@ -1,7 +1,7 @@
 #ifndef __WOCHAT_WINDOWS5_H__
 #define __WOCHAT_WINDOWS5_H__
 
-#include "xwindui.h"
+#include "dui/dui_win.h"
 
 uint16_t inputMessage[XWIN_MAX_INPUTSTRING + 1] = { 0 };
 
@@ -71,17 +71,15 @@ public:
 		m_backgroundColor = 0xFFFFFFFF;
 		m_buttonStartIdx = XWIN5_BUTTON_EMOJI;
 		m_buttonEndIdx = XWIN5_BUTTON_SENDMESSAGE;
-		m_property |= XWIN_PROP_MOVEWIN;
+		m_property |= DUI_PROP_MOVEWIN;
 		m_message = WM_WIN5_MESSAGE;
+
+		InitButtons();
 	}
 
 	~XWindow5()
 	{
 	}
-
-	HWND m_hWndEdit = nullptr;
-
-	//wchar_t m_string001[XWIN_MAX_STRING + 1] = { 0 };
 
 	static int ButtonAction(void* obj, U32 uMsg, U64 wParam, U64 lParam)
 	{
@@ -250,44 +248,12 @@ public:
 
 public:
 
-	uint16_t* GetInputMessage(U16* charNum)
-	{
-		U16 characterCount = 0;
-		uint16_t* msg = nullptr;
-		GETTEXTEX txtex = { 0 };
-		SETTEXTEX setex = { ST_UNICODE,  1200 };
-		GETTEXTLENGTHEX txtlengex = { GTL_DEFAULT, 1200 };
-
-		txtex.cb = XWIN_MAX_INPUTSTRING;
-		txtex.flags = GT_RAWTEXT;
-		txtex.codepage = 1200;
-
-		if (::IsWindow(m_hWndEdit))
-		{
-			characterCount = (U16)::SendMessage(m_hWndEdit, EM_GETTEXTLENGTHEX, (WPARAM)&txtlengex, 0);
-			if (characterCount > 0 && characterCount <= XWIN_MAX_INPUTSTRING)
-			{
-				::SendMessage(m_hWndEdit, EM_GETTEXTEX, (WPARAM)&txtex, (LPARAM)inputMessage);
-				::SendMessage(m_hWndEdit, EM_SETTEXTEX, (WPARAM)&setex, (LPARAM)nullptr);	// clear the input message
-				inputMessage[characterCount] = 0;
-				msg = (uint16_t*)inputMessage;
-				if (nullptr != charNum)
-					*charNum = characterCount;
-			}
-		}
-		return msg;
-	}
-
 	void PostWindowHide()
 	{
-		if (::IsWindow(m_hWndEdit))
-			::ShowWindow(m_hWndEdit, SW_HIDE);
 	}
 
 	void PostWindowShow()
 	{
-		if (::IsWindow(m_hWndEdit))
-			::ShowWindow(m_hWndEdit, SW_SHOW);
 	}
 
 	void UpdatePosition()
@@ -303,65 +269,12 @@ public:
 
 	bool CreateEditWindow()
 	{
-		bool bRet = false;
-		m_hWndEdit = nullptr;
-
-		if (::IsWindow(m_hWnd))
-		{
-			m_hWndEdit = AE_CreateEditWindow(m_hWnd, g_hInstance, nullptr);
-
-			if (::IsWindow(m_hWndEdit))
-			{
-				bRet = true;
-				HFONT hFont = CreateFontIndirectW(&g_logFont);
-				if (nullptr != hFont)
-				{
-					::SendMessage(m_hWndEdit, WM_SETFONT, (WPARAM)hFont, FALSE);
-				}
-				//::SendMessage(m_hWndEdit, AEM_SETOPTIONS, AECOOP_XOR, ES_MULTILINE);
-				//::SendMessage(m_hWndEdit, AEM_SETOPTIONS, AECOOP_AND, ~WS_HSCROLL);
-			}
-		}
+		bool bRet = true;
 		return bRet;;
 	}
 
 	int UpdateEditorWindowPosition()
 	{
-		if (::IsWindow(m_hWndEdit))
-		{
-			if (::IsWindowVisible(m_hWndEdit))
-			{
-				assert(m_status & XWIN_STATUS_VISIBLE);
-				assert(m_area.left > 0);
-				assert(m_area.top > 0);
-				assert(m_area.right > m_area.left);
-				assert(m_area.bottom > m_area.top);
-
-				::SetWindowPos(m_hWndEdit, NULL,
-					m_area.left + GAP_LEFT4,
-					m_area.top + GAP_TOP4,
-					m_area.right - m_area.left - (GAP_LEFT4 + GAP_RIGHT4),
-					m_area.bottom - m_area.top - (GAP_TOP4 + GAP_BOTTOM4),
-					SWP_NOZORDER);
-			}
-			else
-			{
-				assert(0 == (m_status & XWIN_STATUS_VISIBLE));
-			}
-		}
-		else
-		{
-			assert(false);
-		}
-		return 0;
-	}
-
-	int DoActionOnModeChanged(AppMode mode)
-	{
-		if (modeTalk == mode)
-			WindowShow();
-		else
-			WindowHide();
 		return 0;
 	}
 

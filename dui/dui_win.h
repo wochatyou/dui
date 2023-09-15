@@ -1,5 +1,13 @@
-#ifndef __WOCHAT_DUI_H__
-#define __WOCHAT_DUI_H__
+#ifndef __DUI_WIN_H__
+#define __DUI_WIN_H__
+
+#include "dui.h"
+
+#ifdef _MSC_VER
+#define DUI_NO_VTABLE __declspec(novtable)
+#else
+#define DUI_NO_VTABLE
+#endif
 
 // a pure 32-bit true color bitmap object
 typedef struct XBitmap
@@ -48,22 +56,22 @@ enum XButtonState
 
 enum
 {
-	XWIN_STATUS_NODRAW    = 0x00,	// do not need to draw      
-	XWIN_STATUS_VISIBLE   = 0x01,	// is this virtual window visible?
-	XWIN_STATUS_VSCROLL   = 0x02,	// is this virtual window has vertical scroll bar?
-	XWIN_STATUS_HSCROLL   = 0x04,	// is this virtual window has horizonal scroll bar?
-	XWIN_STATUS_ISFOCUS   = 0x08,	// is the input redirected into this virutal window?
-	XWIN_STATUS_NEEDRAW   = 0x10,	// does this virtual windows need to be redraw?
-	XWIN_STATUS_HASCARET  = 0x20,	// is this virutal window has a caret?
+	DUI_STATUS_NODRAW    = 0x00,	// do not need to draw      
+	DUI_STATUS_VISIBLE   = 0x01,	// is this virtual window visible?
+	DUI_STATUS_VSCROLL   = 0x02,	// is this virtual window has vertical scroll bar?
+	DUI_STATUS_HSCROLL   = 0x04,	// is this virtual window has horizonal scroll bar?
+	DUI_STATUS_ISFOCUS   = 0x08,	// is the input redirected into this virutal window?
+	DUI_STATUS_NEEDRAW   = 0x10,	// does this virtual windows need to be redraw?
+	DUI_STATUS_HASCARET  = 0x20,	// is this virutal window has a caret?
 };
 
 enum
 {
-	XWIN_PROP_NONE		  = 0x00,   // None Properties
-	XWIN_PROP_MOVEWIN	  = 0x01,   // Move the whole window while LButton is pressed
-	XWIN_PROP_BTNACTIVE	  = 0x02,   // no active button on this virutal window
-	XWIN_PROP_HASVSCROLL  = 0x04,    // have vertical scroll bar
-	XWIN_PROP_HASHSCROLL  = 0x08   
+	DUI_PROP_NONE		  = 0x00,   // None Properties
+	DUI_PROP_MOVEWIN	  = 0x01,   // Move the whole window while LButton is pressed
+	DUI_PROP_BTNACTIVE	  = 0x02,   // no active button on this virutal window
+	DUI_PROP_HASVSCROLL  = 0x04,    // have vertical scroll bar
+	DUI_PROP_HASHSCROLL  = 0x08   
 };
 
 enum
@@ -73,13 +81,12 @@ enum
 	DEFAULT_SCROLLTHUMB_COLOR   = 0xFFB9B4B2
 };
 
+
 template <class T>
-class ATL_NO_VTABLE XWindowT
+class DUI_NO_VTABLE XWindowT
 {
 public:
-	MemoryContext m_pool = nullptr;
-
-	HWND	m_hWnd = nullptr;
+	void*	m_hWnd = nullptr;
 	U32*    m_screen = nullptr;
 	U32		m_size = 0;
 	U8      m_Id;
@@ -91,14 +98,17 @@ public:
 
 	int     m_scrollWidth = 8; // in pixel
 
+#ifdef _WIN32
 	HCURSOR  m_cursorHand = nullptr;
+#else
+	void*  m_cursorHand = nullptr;
+#endif
 	U32	     m_message = 0;
 	U32      m_backgroundColor = DEFAULT_BACKGROUND_COLOR;
 	U32      m_scrollbarColor = DEFAULT_SCROLLBKG_COLOR;
 	U32      m_thumbColor = DEFAULT_SCROLLTHUMB_COLOR;
 
-	enum 
-	{
+	enum {
 		MAX_BUTTONS = 16,
 		MAX_BUTTON_BITMAPS = (MAX_BUTTONS << 2)
 	};
@@ -106,8 +116,8 @@ public:
 	XButton	 m_button[MAX_BUTTONS];
 	XBitmap	 m_bitmap[MAX_BUTTON_BITMAPS];
 
-	U8	m_status = XWIN_STATUS_VISIBLE;
-	U8  m_property = XWIN_PROP_NONE;
+	U8	m_status = DUI_STATUS_VISIBLE;
+	U8  m_property = DUI_PROP_NONE;
 	
 	int m_totalHeight = -1;
 	int m_vscrollOffset = -1;
@@ -148,10 +158,16 @@ public:
 
 	~XWindowT() 
 	{
-		mempool_destroy(m_pool);
-		m_pool = nullptr;
 	}
 
+	bool IsRealWindow(void* hwnd)
+	{
+#ifdef _WIN32
+		return (::IsWindow((HWND)hwnd));
+#else
+		return false;
+#endif
+	}
 	void SetWindowId(U8 id)
 	{
 		m_Id = id;
@@ -159,13 +175,13 @@ public:
 
 	bool IsVisible() const
 	{
-		return (0 != (m_status & XWIN_STATUS_VISIBLE));
+		return (0 != (m_status & DUI_STATUS_VISIBLE));
 	}
 
 	void PostWindowHide() {}
 	void WindowHide()
 	{
-		m_status &= (~XWIN_STATUS_VISIBLE);
+		m_status &= (~DUI_STATUS_VISIBLE);
 		T* pT = static_cast<T*>(this);
 		pT->PostWindowHide();
 	}
@@ -173,7 +189,7 @@ public:
 	void PostWindowShow() {}
 	void WindowShow()
 	{
-		m_status |= XWIN_STATUS_VISIBLE;
+		m_status |= DUI_STATUS_VISIBLE;
 		T* pT = static_cast<T*>(this);
 		pT->PostWindowShow();
 
@@ -185,19 +201,9 @@ public:
 		return 0;
 	}
 
-	int DoActionOnModeChanged(AppMode mode) { return 0; }
-	int ChangeAppMode(AppMode mode)
-	{
-		int ret = 0;
-		T* pT = static_cast<T*>(this);
-		ret = pT->DoActionOnModeChanged(mode);
-
-		return ret;
-	}
-
 	int ClearButtonStatus() 
 	{ 
-		int ret = XWIN_STATUS_NODRAW;
+		int ret = DUI_STATUS_NODRAW;
 		U8 state;
 		XButton* button;
 		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
@@ -206,8 +212,8 @@ public:
 
 			if (XBUTTON_STATE_NORMAL != button->state && XBUTTON_STATE_ACTIVE != button->state)
 			{
-				m_status |= XWIN_STATUS_NEEDRAW; // Invalidate the screen
-				ret = XWIN_STATUS_NEEDRAW;
+				m_status |= DUI_STATUS_NEEDRAW; // Invalidate the screen
+				ret = DUI_STATUS_NEEDRAW;
 			}
 
 			button->state = XBUTTON_STATE_NORMAL;
@@ -227,15 +233,18 @@ public:
 		return m_screen;
 	}
 
-	BOOL PostMessage(
-		_In_ UINT message,
-		_In_ WPARAM wParam = 0,
-		_In_ LPARAM lParam = 0) throw()
+	bool PostMessage(U32 message, U64 wParam = 0, U64 lParam = 0)
 	{
-		BOOL bRet = FALSE;
-		ATLASSERT(::IsWindow(m_hWnd));
-		if(::IsWindow(m_hWnd))
-			bRet =  ::PostMessage(m_hWnd, message, wParam, lParam);
+		bool bRet = false;
+
+		assert(IsRealWindow(m_hWnd));
+
+		if (IsRealWindow(m_hWnd))
+		{
+#if defined(_WIN32)
+			bRet = ::PostMessage((HWND)m_hWnd, (UINT)message, (WPARAM)wParam, (LPARAM)lParam);
+#endif
+		}
 
 		return bRet;
 	}
@@ -303,7 +312,7 @@ public:
 		else
 			m_size = (U32)((m_area.right - m_area.left) * (m_area.bottom - m_area.top));
 
-		m_status |= XWIN_STATUS_NEEDRAW;
+		m_status |= DUI_STATUS_NEEDRAW;
 		
 		if (nullptr != r)
 		{
@@ -313,13 +322,14 @@ public:
 	}
 
 	int Draw() { return 0; }
-	U32* UpdateScreen() 
+
+	U32* Render() 
 	{
 		U32* screenBuf = nullptr;
-		U8 status = m_status & (XWIN_STATUS_VISIBLE | XWIN_STATUS_NEEDRAW);
+		U8 status = m_status & (DUI_STATUS_VISIBLE | DUI_STATUS_NEEDRAW);
 
 		// We only draw this virtual window when 1: it is visible, and 2: it needs draw
-		if ((XWIN_STATUS_VISIBLE | XWIN_STATUS_NEEDRAW) == status)
+		if ((DUI_STATUS_VISIBLE | DUI_STATUS_NEEDRAW) == status)
 		{
 			int w = m_area.right - m_area.left;
 			int h = m_area.bottom - m_area.top;
@@ -329,7 +339,7 @@ public:
 			// fill the whole screen of this virutal window with a single color
 			ScreenClear(m_screen, m_size, m_backgroundColor);
 
-			if (XWIN_STATUS_VSCROLL & m_status)
+			if (DUI_STATUS_VSCROLL & m_status)
 			{
 				assert(m_totalHeight > h);
 				// We have the vertical scroll bar to draw
@@ -362,13 +372,13 @@ public:
 			screenBuf = m_screen;
 		}
 		// to avoid another needless draw
-		m_status &= (~XWIN_STATUS_NEEDRAW);
+		m_status &= (~DUI_STATUS_NEEDRAW);
 		
 		return screenBuf;
 	}
 
-	int DoSize(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr) { return 0; }
-	int OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData)
+	int DoSize(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnSize(U32 uMsg, U64 wParam, U64 lParam, void* lpData)
 	{
 		RECT* r = (RECT*)lParam;
 		if (nullptr != r)
@@ -391,16 +401,16 @@ public:
 			T* pT = static_cast<T*>(this);
 			pT->DoSize(uMsg, wParam, lParam, lpData);
 		}
-		m_status |= XWIN_STATUS_NEEDRAW;  // need to redraw this virtual window
+		m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 
-		return XWIN_STATUS_NEEDRAW;
+		return DUI_STATUS_NEEDRAW;
 	}
 
-	int DoMouseMove(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr) { return 0; }
-	int OnMouseMove(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	int DoMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		int r0  = XWIN_STATUS_NODRAW;
-		int r1  = XWIN_STATUS_NODRAW;
+		int r0  = DUI_STATUS_NODRAW;
+		int r1  = DUI_STATUS_NODRAW;
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
 
@@ -426,18 +436,18 @@ public:
 		{
 			int hit = -1;  // no hit so far
 			// handle the vertical bar
-			if (XWIN_PROP_HASVSCROLL & m_property)
+			if (DUI_PROP_HASVSCROLL & m_property)
 			{
 				U8 status = m_status;
-				m_status &= (~XWIN_STATUS_VSCROLL);
+				m_status &= (~DUI_STATUS_VSCROLL);
 
 				if (xPos >= (m_area.right - m_scrollWidth))
 				{
 					if (m_totalHeight > h)
-						m_status |= XWIN_STATUS_VSCROLL;
+						m_status |= DUI_STATUS_VSCROLL;
 				}
-				if ((XWIN_STATUS_VSCROLL & status) != (XWIN_STATUS_VSCROLL & m_status))
-					r0 = XWIN_STATUS_NEEDRAW;
+				if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
+					r0 = DUI_STATUS_NEEDRAW;
 			}
 
 			// transfer the coordination from real window to local virutal window
@@ -466,17 +476,17 @@ public:
 				{
 					SetCursor(m_cursorHand);
 					button->state = XBUTTON_STATE_HOVERED;
-					r0 = XWIN_STATUS_NEEDRAW;
+					r0 = DUI_STATUS_NEEDRAW;
 				}
 			}
 		}
 		else
 		{
 			// handle the vertical bar
-			if (XWIN_STATUS_VSCROLL & m_status)
+			if (DUI_STATUS_VSCROLL & m_status)
 			{
-				m_status &= (~XWIN_STATUS_VSCROLL);
-				r0 = XWIN_STATUS_NEEDRAW;
+				m_status &= (~DUI_STATUS_VSCROLL);
+				r0 = DUI_STATUS_NEEDRAW;
 			}
 		}
 
@@ -486,7 +496,7 @@ public:
 			button = &m_button[i];
 			if (button->state != button->statePrev)
 			{
-				r0 = XWIN_STATUS_NEEDRAW;
+				r0 = DUI_STATUS_NEEDRAW;
 				break;
 			}
 		}
@@ -496,19 +506,19 @@ public:
 			r1 = pT->DoMouseMove(uMsg, wParam, lParam, lpData);
 		}
 
-		if (XWIN_STATUS_NODRAW != r0 || XWIN_STATUS_NODRAW != r1)
+		if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1)
 		{
-			m_status |= XWIN_STATUS_NEEDRAW;  // need to redraw this virtual window
-			return XWIN_STATUS_NEEDRAW;
+			m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
+			return DUI_STATUS_NEEDRAW;
 		}
-		return XWIN_STATUS_NODRAW;
+		return DUI_STATUS_NODRAW;
 	}
 
-	int DoLButtonDown(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr) { return 0; }
-	int OnLButtonDown(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	int DoLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		int r0 = XWIN_STATUS_NODRAW;
-		int r1 = XWIN_STATUS_NODRAW;
+		int r0 = DUI_STATUS_NODRAW;
+		int r1 = DUI_STATUS_NODRAW;
 
 		XButton* button;
 		int xPos = GET_X_LPARAM(lParam);
@@ -535,40 +545,40 @@ public:
 			int h = m_area.bottom - m_area.top;
 
 			// handle the vertical bar
-			if (XWIN_PROP_HASVSCROLL & m_property)
+			if (DUI_PROP_HASVSCROLL & m_property)
 			{
 				int thumb_start, thumb_height;
 				U8 status = m_status;
-				m_status &= (~XWIN_STATUS_VSCROLL);
+				m_status &= (~DUI_STATUS_VSCROLL);
 
 				if (xPos >= (m_area.right - m_scrollWidth))
 				{
 					if (m_totalHeight > h)
 					{
-						m_status |= XWIN_STATUS_VSCROLL;
+						m_status |= DUI_STATUS_VSCROLL;
 						thumb_start = (m_vscrollOffset * h) / m_totalHeight;
 						thumb_height = (h * h) / m_totalHeight;
 						if (yPos < (m_area.top + thumb_start))
 						{
 							m_vscrollOffset -= m_vscrollStep;
-							r0 = XWIN_STATUS_NEEDRAW;
+							r0 = DUI_STATUS_NEEDRAW;
 						}
 						if (yPos > (m_area.top + thumb_start + thumb_height))
 						{
 							m_vscrollOffset += m_vscrollStep;
-							r0 = XWIN_STATUS_NEEDRAW;
+							r0 = DUI_STATUS_NEEDRAW;
 						}
 						if (m_vscrollOffset < 0)
 							m_vscrollOffset = 0;
 						if (m_vscrollOffset > (m_totalHeight - h))
 							m_vscrollOffset = m_totalHeight - h;
 
-						return XWIN_STATUS_NEEDRAW;
+						return DUI_STATUS_NEEDRAW;
 					}
 
 				}
-				if ((XWIN_STATUS_VSCROLL & status) != (XWIN_STATUS_VSCROLL & m_status))
-					r0 = XWIN_STATUS_NEEDRAW;
+				if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
+					r0 = DUI_STATUS_NEEDRAW;
 			}
 
 			// transfer the coordination from real window to local virutal window
@@ -593,12 +603,12 @@ public:
 				{
 					SetCursor(m_cursorHand);
 					button->state = XBUTTON_STATE_PRESSED;
-					r0 = XWIN_STATUS_NEEDRAW;
+					r0 = DUI_STATUS_NEEDRAW;
 				}
 			}
 			else
 			{	// if the mouse does not hit the button, we can move the whole real window
-				if (XWIN_PROP_MOVEWIN & m_property)
+				if (DUI_PROP_MOVEWIN & m_property)
 					PostMessage(WM_NCLBUTTONDOWN, HTCAPTION, lParam);
 			}
 		}
@@ -609,7 +619,7 @@ public:
 			button = &m_button[i];
 			if (button->state != button->statePrev)
 			{
-				r0 = XWIN_STATUS_NEEDRAW;
+				r0 = DUI_STATUS_NEEDRAW;
 				break;
 			}
 		}
@@ -619,20 +629,20 @@ public:
 			r1 = pT->DoLButtonDown(uMsg, wParam, lParam, lpData);
 		}
 
-		if (XWIN_STATUS_NODRAW != r0 || XWIN_STATUS_NODRAW != r1)
+		if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1)
 		{
-			m_status |= XWIN_STATUS_NEEDRAW;  // need to redraw this virtual window
-			return XWIN_STATUS_NEEDRAW;
+			m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
+			return DUI_STATUS_NEEDRAW;
 		}
-		return XWIN_STATUS_NODRAW;
+		return DUI_STATUS_NODRAW;
 
 	}
 
-	int DoLButtonUp(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr) { return 0; }
-	int OnLButtonUp(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	int DoLButtonUp(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnLButtonUp(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		int r0 = XWIN_STATUS_NODRAW;
-		int r1 = XWIN_STATUS_NODRAW;
+		int r0 = DUI_STATUS_NODRAW;
+		int r1 = DUI_STATUS_NODRAW;
 
 		XButton* button;
 		int xPos = GET_X_LPARAM(lParam);
@@ -678,7 +688,7 @@ public:
 					if (m_buttonActiveIdx >= m_buttonStartIdx)
 						m_button[m_buttonActiveIdx].state = XBUTTON_STATE_NORMAL;
 
-					if (XWIN_PROP_BTNACTIVE & m_property)
+					if (DUI_PROP_BTNACTIVE & m_property)
 					{
 						m_buttonActiveIdx = hit;
 						button->state = XBUTTON_STATE_ACTIVE;
@@ -688,7 +698,7 @@ public:
 						m_buttonActiveIdx = -1;
 						button->state = XBUTTON_STATE_HOVERED;
 					}
-					r0 = XWIN_STATUS_NEEDRAW;
+					r0 = DUI_STATUS_NEEDRAW;
 
 					// call the Action binded to this button
 					if (nullptr != button->pfAction)
@@ -703,7 +713,7 @@ public:
 			button = &m_button[i];
 			if (button->state != button->statePrev)
 			{
-				r0 = XWIN_STATUS_NEEDRAW;
+				r0 = DUI_STATUS_NEEDRAW;
 				break;
 			}
 		}
@@ -713,48 +723,48 @@ public:
 			r1 = pT->DoLButtonUp(uMsg, wParam, lParam, lpData);
 		}
 
-		if (XWIN_STATUS_NODRAW != r0 || XWIN_STATUS_NODRAW != r1)
+		if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1)
 		{
-			m_status |= XWIN_STATUS_NEEDRAW;  // need to redraw this virtual window
-			return XWIN_STATUS_NEEDRAW;
+			m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
+			return DUI_STATUS_NEEDRAW;
 		}
 
-		return XWIN_STATUS_NODRAW;
+		return DUI_STATUS_NODRAW;
 	}
 
-	int DoLButtonDoubleClick(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr) { return 0; }
-	int OnLButtonDoubleClick(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	int DoLButtonDoubleClick(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnLButtonDoubleClick(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		int ret = XWIN_STATUS_NODRAW;
+		int ret = DUI_STATUS_NODRAW;
 		T* pT = static_cast<T*>(this);
 
 		ret = pT->DoLButtonDoubleClick(uMsg, wParam, lParam, lpData);
 
-		if (XWIN_STATUS_NODRAW != ret)
-			m_status |= XWIN_STATUS_NEEDRAW;  // need to redraw this virtual window
+		if (DUI_STATUS_NODRAW != ret)
+			m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 
 		return ret;
 	}
 
-	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr) { return 0;  }
-	int OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	int DoCreate(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0;  }
+	int OnCreate(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		int ret = XWIN_STATUS_NODRAW;
-		m_hWnd = (HWND)wParam;
+		int ret = DUI_STATUS_NODRAW;
+		m_hWnd = (void*)wParam;
 
-		ATLASSERT(::IsWindow(m_hWnd));
+		assert(IsRealWindow(m_hWnd));
 
 		T* pT = static_cast<T*>(this);
 		ret = pT->DoCreate(uMsg, wParam, lParam, lpData);
 
-		if (XWIN_STATUS_NODRAW != ret)
-			m_status |= XWIN_STATUS_NEEDRAW;  // need to redraw this virtual window
+		if (DUI_STATUS_NODRAW != ret)
+			m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 
 		return ret;
 	}
 
-	int DoDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr) { return 0; }
-	int OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	int DoDestroy(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnDestroy(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
 		T* pT = static_cast<T*>(this);
 		int ret = pT->DoDestroy(uMsg, wParam, lParam, lpData);
@@ -763,5 +773,5 @@ public:
 
 };
 
-#endif  /* __WOCHAT_DUI_H__ */
+#endif  /* __DUI_WIN_H__ */
 

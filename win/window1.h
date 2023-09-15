@@ -1,7 +1,8 @@
 #ifndef __WOCHAT_WINDOWS1_H__
 #define __WOCHAT_WINDOWS1_H__
 
-#include "xwindui.h"
+#include "dui/dui_win.h"
+
 enum
 {
 	XWIN1_BUTTON_SEARCH = 0
@@ -24,7 +25,7 @@ public:
 		m_backgroundColor = 0xFFEAECED;
 		m_buttonStartIdx = XWIN1_BUTTON_SEARCH;
 		m_buttonEndIdx = XWIN1_BUTTON_SEARCH;
-		m_property |= XWIN_PROP_MOVEWIN;
+		m_property |= DUI_PROP_MOVEWIN;
 
 		m_message = WM_WIN1_MESSAGE;
 	}
@@ -105,21 +106,6 @@ public:
 	{
 		int ret = InitButtons();
 		return ret;
-	}
-
-	int Draw()
-	{
-		int id;
-		XButton* button;
-		XBitmap* bmp;
-		int w = m_area.right - m_area.left;
-		int h = m_area.bottom - m_area.top;
-		id = XWIN1_BUTTON_SEARCH;  button = &m_button[id]; bmp = button->imgNormal;
-		int sw = (w - bmp->w - 30);
-		int sh = bmp->h;
-		ScreenFillRect(m_screen, w, h, 0xFFFFFFFF, sw, sh, 10, (h - sh)>>1);
-
-		return 0;
 	}
 };
 

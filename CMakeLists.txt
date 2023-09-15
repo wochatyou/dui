@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(wochat)
+project(dui)
 
 add_definitions(-D_UNICODE -DUNICODE -DNOMINMAX)
 

@@ -13,14 +13,14 @@
 #error xwindow.h requires atlwin.h to be included first
 #endif
 
-#if 0
-#include "windows0.h"
-#include "windows1.h"
-#include "windows2.h"
-#include "windows3.h"
-#include "windows4.h"
-#include "windows5.h"
-#endif
+#include "dui/dui.h"
+
+#include "window0.h"
+#include "window1.h"
+#include "window2.h"
+#include "window3.h"
+#include "window4.h"
+#include "window5.h"
 
 /************************************************************************************************
 *  The layout of the Main Window
@@ -70,26 +70,37 @@ void SafeRelease(T** ppT)
 #define SPLIT_FLATBAR			0x00000020
 #define SPLIT_FIXEDBARSIZE		0x00000010
 
-// Note: SPLIT_PROPORTIONAL and SPLIT_LEFTALIGNED/SPLIT_BOTTOMALIGNED are 
-// mutually exclusive. If both are set, splitter defaults to SPLIT_PROPORTIONAL.
-// Also, SPLIT_FLATBAR overrides SPLIT_GRADIENTBAR if both are set.
-
 UINT				g_DotsPerInch = 96;
 ID2D1Factory*		g_pD2DFactory = nullptr;
 
 class XWindow : public ATL::CWindowImpl<XWindow>
 {
 private:
-	enum { m_nPanesCount = 2, m_nPropMax = INT_MAX, m_cxyStep = 1, SPLITLINE_WIDTH = 2 };
+	enum { m_nPanesCount = 2, m_nPropMax = INT_MAX, m_cxyStep = 1, SPLITLINE_WIDTH = 2, INIT_VPOS = 160 };
 
-	bool m_bVertical = true;
+	// the memory to hold the context to paint to the screen
+	U32* m_screenBuff = nullptr;
+	U32  m_screenSize = 0;
+
 	RECT m_rectClient;
+	int m_windowWidth = 0;
+	int m_windowHeight = 0;
+
 	int m_splitterVPos = -1;               // splitter bar position
 	int m_splitterVPosNew = -1;            // internal - new position while moving
 	int m_splitterVPosOld = -1;            // keep align value
-	int m_splitterVPosToLeft  = 100;       // the minum pixel to the left of the client area.
-	int m_splitterVPosToRight = 100;       // the minum pixel to the right of the client area.
+	int m_splitterVPosToLeft  = 200;       // the minum pixel to the left of the client area.
+	int m_splitterVPosToRight = 200;       // the minum pixel to the right of the client area.
 
+	int m_marginLeft = 64;
+	int m_marginRight = 0;
+
+	int m_splitterHPos = -1;
+	int m_splitterHPosNew = -1;
+	int m_splitterHPosOld = -1;
+
+	int m_splitterHPos0 = XWIN1_HEIGHT;
+	int m_splitterHPos1 = XWIN3_HEIGHT;
 
 	int m_nDefActivePane = SPLIT_PANE_NONE;
 	int m_cxySplitBar = SPLITLINE_WIDTH;  // splitter bar width/height
@@ -99,7 +110,6 @@ private:
 
 	int m_cxyMin = 0;                   // minimum pane size
 	int m_cxyBarEdge = 0;              	// splitter bar edge
-	bool m_bFullDrag = true;
 	int m_cxyDragOffset = 0;		// internal
 	int m_nProportionalPos = 0;
 	bool m_bUpdateProportionalPos = true;
@@ -108,11 +118,22 @@ private:
 	int m_xySplitterDefPos = -1;            // default position
 	bool m_bProportionalDefPos = false;     // porportinal def pos
 
+	XWindow0 m_win0;
+	XWindow1 m_win1;
+	XWindow2 m_win2;
+	XWindow3 m_win3;
+	XWindow4 m_win4;
+	XWindow5 m_win5;
+
+	RECT m_rect0 = { 0 };
+	RECT m_rect1 = { 0 };
+	RECT m_rect2 = { 0 };
+	RECT m_rect3 = { 0 };
+	RECT m_rect4 = { 0 };
+	RECT m_rect5 = { 0 };
+
 	ID2D1HwndRenderTarget* m_pD2DRenderTarget = nullptr;
 	ID2D1Bitmap*           m_pixelBitmap = nullptr;
-
-	int m_splitterPos[32];
-	U32 m_splitterOrientation; // 0 : vertical / 1: horizonal
 
 public:
 	DECLARE_XWND_CLASS(NULL, IDR_MAINFRAME, 0)
@@ -122,7 +143,14 @@ public:
 		m_rectClient.left = m_rectClient.right = m_rectClient.top = m_rectClient.bottom = 0;
 	}
 
-	~XWindow() {}
+	~XWindow() 
+	{
+		if (nullptr != m_screenBuff)
+			VirtualFree(m_screenBuff, 0, MEM_RELEASE);
+
+		m_screenBuff = nullptr;
+		m_screenSize = 0;
+	}
 
 	bool IsInteractive() const
 	{
@@ -155,6 +183,12 @@ public:
 
 	LRESULT OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		m_win0.OnDestroy(uMsg, wParam, lParam);
+		m_win1.OnDestroy(uMsg, wParam, lParam);
+		m_win2.OnDestroy(uMsg, wParam, lParam);
+		m_win3.OnDestroy(uMsg, wParam, lParam);
+		m_win4.OnDestroy(uMsg, wParam, lParam);
+		m_win5.OnDestroy(uMsg, wParam, lParam);
 
 		SafeRelease(&m_pixelBitmap);
 		SafeRelease(&m_pD2DRenderTarget);
@@ -168,6 +202,7 @@ public:
 	LRESULT OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
 		HRESULT hr;
+		int r0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0;
 
 		m_hCursorWE = ::LoadCursor(NULL, IDC_SIZEWE);
 		m_hCursorNS = ::LoadCursor(NULL, IDC_SIZENS);
@@ -189,6 +224,19 @@ public:
 		}
 		g_DotsPerInch = GetDpiForWindow(m_hWnd);
 		
+		r0 = m_win0.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r1 = m_win1.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r2 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r3 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r4 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		r5 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+
+		if (0 != r0 || 0 != r1 || 0 != r2)
+		{
+			MessageBox(_T("WM_CREATE failed!"), _T("Error"), MB_OK);
+			PostMessage(WM_CLOSE);
+			return 0;
+		}
 
 		Init();
 
@@ -221,6 +269,8 @@ public:
 
 	LRESULT OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		U16 W, H;
+
 		if (SIZE_MINIMIZED == wParam)
 			return 0;
 
@@ -230,10 +280,36 @@ public:
 		ATLASSERT(m_rectClient.right > 0);
 		ATLASSERT(m_rectClient.bottom > 0);
 
+		m_windowWidth = m_rectClient.right - m_rectClient.left;
+		m_windowHeight = m_rectClient.bottom - m_rectClient.top;
+
+		W = (U16)(m_rectClient.right - m_rectClient.left);
+		H = (U16)(m_rectClient.bottom - m_rectClient.top);
+
+		m_screenBuff = nullptr;
+		m_screenSize = DUI_ALIGN_PAGE(W * H * sizeof(U32));
+		ATLASSERT(m_screenSize >= (W * H * sizeof(U32)));
+
+		m_screenBuff = (U32*)VirtualAlloc(NULL, m_screenSize, MEM_COMMIT, PAGE_READWRITE);
+		if (nullptr == m_screenBuff)
+		{
+			m_screenSize = 0;
+			return 0;
+		}
+
 		if(m_splitterVPos < 0)
 		{
-			m_splitterVPos = (m_rectClient.right - m_rectClient.left) >> 1;
-   			if(SPLIT_LEFTALIGNED & m_dwExtendedStyle)  // it is left aligned
+			m_splitterVPos = INIT_VPOS;
+			if (m_splitterVPos < m_splitterVPosToLeft)
+				m_splitterVPos = m_splitterVPosToLeft;
+
+			if (m_splitterVPos > (m_rectClient.right - m_rectClient.left - m_splitterVPosToRight))
+			{
+				m_splitterVPos = (m_rectClient.right - m_rectClient.left - m_splitterVPosToRight);
+				ATLASSERT(m_splitterVPos > m_splitterVPosToLeft);
+			}
+
+			if(SPLIT_LEFTALIGNED & m_dwExtendedStyle)  // it is left aligned
 			{
 				m_splitterVPosOld = m_splitterVPos;
 			}
@@ -264,7 +340,71 @@ public:
 			ATLASSERT(m_splitterVPos > m_splitterVPosToLeft);
 		}
 		
+		if (m_splitterHPos < 0)
+		{
+			m_splitterHPos = m_rectClient.bottom - XWIN5_HEIGHT;
+		}
+
 		SafeRelease(&m_pD2DRenderTarget);
+
+		if (nullptr != m_screenBuff)
+		{
+			U32* dst = m_screenBuff;
+			U32 size;
+			RECT* r;
+
+			r = &m_rect0;
+			r->left = m_rectClient.left;
+			r->right = XWIN0_WIDTH;
+			r->top = m_rectClient.top;
+			r->bottom = m_rectClient.bottom;
+			m_win0.OnSize(uMsg, wParam, (LPARAM)r, dst);
+			size = (U32)((r->right - r->left) * (r->bottom - r->top));
+			dst += size;
+
+			r = &m_rect1;
+			r->left = XWIN0_WIDTH;
+			r->right = m_splitterVPos;
+			r->top = m_rectClient.top;
+			r->bottom = m_splitterHPos0;
+			m_win1.OnSize(uMsg, wParam, (LPARAM)r, dst);
+			size = (U32)((r->right - r->left) * (r->bottom - r->top));
+			dst += size;
+
+			r = &m_rect2;
+			r->left = XWIN0_WIDTH;
+			r->right = m_splitterVPos;
+			r->top = m_splitterHPos0 + SPLITLINE_WIDTH;
+			r->bottom = m_rectClient.bottom;
+			m_win2.OnSize(uMsg, wParam, (LPARAM)r, dst);
+			size = (U32)((r->right - r->left) * (r->bottom - r->top));
+			dst += size;
+
+			r = &m_rect3;
+			r->left = m_splitterVPos + SPLITLINE_WIDTH;
+			r->right = m_rectClient.right;
+			r->top = m_rectClient.top;
+			r->bottom = m_splitterHPos1;
+			m_win3.OnSize(uMsg, wParam, (LPARAM)r, dst);
+			size = (U32)((r->right - r->left) * (r->bottom - r->top));
+			dst += size;
+
+			r = &m_rect4;
+			r->left = m_splitterVPos + SPLITLINE_WIDTH;
+			r->right = m_rectClient.right;
+			r->top = m_splitterHPos1 + SPLITLINE_WIDTH;
+			r->bottom = m_splitterHPos;
+			m_win4.OnSize(uMsg, wParam, (LPARAM)r, dst);
+			size = (U32)((r->right - r->left) * (r->bottom - r->top));
+			dst += size;
+
+			r = &m_rect5;
+			r->left = m_splitterVPos + SPLITLINE_WIDTH;
+			r->right = m_rectClient.right;
+			r->top = m_splitterHPos + SPLITLINE_WIDTH;
+			r->bottom = m_rectClient.bottom;
+			m_win5.OnSize(uMsg, wParam, (LPARAM)r, dst);
+		}
 
 		Invalidate();
 
@@ -273,8 +413,17 @@ public:
 
 	LRESULT OnMouseMove(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		int needReDraw = 0;
+		int needReDraw0 = 0;
+		int needReDraw1 = 0;
+		int needReDraw2 = 0;
+		int needReDraw3 = 0;
+		int needReDraw4 = 0;
+		int needReDraw5 = 0;
+
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
+
 		if(::GetCapture() == m_hWnd)
 		{
 			int	newSplitPosV = xPos - m_cxyDragOffset;
@@ -284,17 +433,44 @@ public:
 
 			if(m_splitterVPos != newSplitPosV)
 			{
-				if(m_bFullDrag)
-				{
-					if(SetSplitterPos(newSplitPosV, true))
-						UpdateWindow();
-				}
-				else
-				{
-					DrawGhostBar();
-					SetSplitterPos(newSplitPosV, false);
-					DrawGhostBar();
-				}
+				if (SetSplitterPos(newSplitPosV, true))
+					needReDraw = 1;
+			}
+			{
+				// window 0 does not need to change
+				RECT* r = &m_rect0;
+				U32* dst = m_screenBuff;
+				U32 size = (U32)((r->right - r->left) * (r->bottom - r->top));
+
+				// windows 1
+				dst += size;
+				r = &m_rect1; r->left = XWIN0_WIDTH; r->right = newSplitPosV; r->top = m_rectClient.top; r->bottom = m_splitterHPos0;
+				size = (U32)((r->right - r->left) * (r->bottom - r->top));
+				m_win1.SetPosition(r, dst, size);
+
+				// windows 2
+				dst += size;
+				r = &m_rect2; r->left = XWIN0_WIDTH; r->right = newSplitPosV; r->top = m_splitterHPos0 + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
+				size = (U32)((r->right - r->left) * (r->bottom - r->top));
+				m_win2.SetPosition(r, dst, size);
+
+				// windows 3
+				dst += size;
+				r = &m_rect3; r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_rectClient.top; r->bottom = m_splitterHPos1;
+				size = (U32)((r->right - r->left) * (r->bottom - r->top));
+				m_win3.SetPosition(r, dst, size);
+
+				// windows 4
+				dst += size;
+				r = &m_rect4; r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_splitterHPos1 + SPLITLINE_WIDTH; r->bottom = m_splitterHPos;
+				size = (U32)((r->right - r->left) * (r->bottom - r->top));
+				m_win4.SetPosition(r, dst, size);
+
+				// windows 5
+				dst += size;
+				r = &m_rect5; r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_splitterHPos + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
+				size = (U32)((r->right - r->left) * (r->bottom - r->top));
+				m_win5.SetPosition(r, dst, size);
 			}
 		}
 		else		// not dragging, just set cursor
@@ -306,20 +482,36 @@ public:
 			}
 		}
 
+		needReDraw0 = m_win0.OnMouseMove(uMsg, wParam, lParam);
+		needReDraw1 = m_win1.OnMouseMove(uMsg, wParam, lParam);
+		needReDraw2 = m_win2.OnMouseMove(uMsg, wParam, lParam);
+		needReDraw3 = m_win3.OnMouseMove(uMsg, wParam, lParam);
+		needReDraw4 = m_win4.OnMouseMove(uMsg, wParam, lParam);
+		needReDraw5 = m_win5.OnMouseMove(uMsg, wParam, lParam);
+
+		if (needReDraw || needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
+			Invalidate();
+
 		return 0;
 	}
 
 	LRESULT OnLButtonDown(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		int needReDraw0;
+		int needReDraw1;
+		int needReDraw2;
+		int needReDraw3;
+		int needReDraw4;
+		int needReDraw5;
+
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
+
 		if((::GetCapture() != m_hWnd) && IsOverSplitterBar(xPos, yPos))
 		{
 			m_splitterVPosNew = m_splitterVPos;
 			SetCapture();
 			::SetCursor(m_hCursorWE);
-			if(!m_bFullDrag)
-				DrawGhostBar();
 			m_cxyDragOffset = xPos - m_splitterVPos;
 		}
 		else if((::GetCapture() == m_hWnd) && !IsOverSplitterBar(xPos, yPos))
@@ -327,16 +519,43 @@ public:
 			::ReleaseCapture();
 		}
 
+		needReDraw0 = m_win0.OnLButtonDown(uMsg, wParam, lParam);
+		needReDraw1 = m_win1.OnLButtonDown(uMsg, wParam, lParam);
+		needReDraw2 = m_win2.OnLButtonDown(uMsg, wParam, lParam);
+		needReDraw3 = m_win3.OnLButtonDown(uMsg, wParam, lParam);
+		needReDraw4 = m_win4.OnLButtonDown(uMsg, wParam, lParam);
+		needReDraw5 = m_win5.OnLButtonDown(uMsg, wParam, lParam);
+
+		if (needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
+			Invalidate();
+
 		return 0;
 	}
 
 	LRESULT OnLButtonUp(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		int needReDraw0;
+		int needReDraw1;
+		int needReDraw2;
+		int needReDraw3;
+		int needReDraw4;
+		int needReDraw5;
+
 		if(::GetCapture() == m_hWnd)
 		{
 			m_splitterVPosNew = m_splitterVPos;
 			::ReleaseCapture();
 		}
+
+		needReDraw0 = m_win0.OnLButtonUp(uMsg, wParam, lParam);
+		needReDraw1 = m_win1.OnLButtonUp(uMsg, wParam, lParam);
+		needReDraw2 = m_win2.OnLButtonUp(uMsg, wParam, lParam);
+		needReDraw3 = m_win3.OnLButtonUp(uMsg, wParam, lParam);
+		needReDraw4 = m_win4.OnLButtonUp(uMsg, wParam, lParam);
+		needReDraw5 = m_win5.OnLButtonUp(uMsg, wParam, lParam);
+
+		if (needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
+			Invalidate();
 
 		return 0;
 	}
@@ -350,10 +569,7 @@ public:
 
 	LRESULT OnCaptureChanged(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
 	{
-		if(!m_bFullDrag)
-			DrawGhostBar();
-
-		if((m_splitterVPosNew != -1) && (!m_bFullDrag || (m_splitterVPos != m_splitterVPosNew)))
+		if((m_splitterVPosNew != -1) && (m_splitterVPos != m_splitterVPosNew))
 		{
 			m_splitterVPos = m_splitterVPosNew;
 			m_splitterVPosNew = -1;
@@ -387,7 +603,6 @@ public:
 				break;
 			case VK_LEFT:
 			case VK_RIGHT:
-				if(m_bVertical)
 				{
 					POINT pt = {};
 					::GetCursorPos(&pt);
@@ -403,6 +618,7 @@ public:
 				break;
 			case VK_UP:
 			case VK_DOWN:
+#if 0
 				if(!m_bVertical)
 				{
 					POINT pt = {};
@@ -416,6 +632,7 @@ public:
 					pt.y += xyPos - m_splitterVPos;
 					::SetCursorPos(pt.x, pt.y);
 				}
+#endif
 				break;
 			default:
 				break;
@@ -499,7 +716,7 @@ public:
 			hr = g_pD2DFactory->CreateHwndRenderTarget(renderTargetProperties, hwndRenderTragetproperties, &m_pD2DRenderTarget);
 			if (S_OK == hr && nullptr != m_pD2DRenderTarget)
 			{
-				U32 pixel[1] = { 0xFF000000 };
+				U32 pixel[1] = { 0xFFDDDDDD };
 				SafeRelease(&m_pixelBitmap);
 				hr = m_pD2DRenderTarget->CreateBitmap(
 					D2D1::SizeU(1, 1), pixel, 4, D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)),
@@ -509,10 +726,14 @@ public:
 
 		if (S_OK == hr && nullptr != m_pD2DRenderTarget && nullptr != m_pixelBitmap)
 		{
+			int w, h;
+			U32* src = nullptr;
+			RECT* r = nullptr;
+
 			m_pD2DRenderTarget->BeginDraw();
 			////////////////////////////////////////////////////////////////////////////////////////////////////
-			m_pD2DRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
-			m_pD2DRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
+			//m_pD2DRenderTarget->SetTransform(D2D1::Matrix3x2F::Identity());
+			//m_pD2DRenderTarget->Clear(D2D1::ColorF(D2D1::ColorF::White));
 
 			// draw seperator lines
 			if (nullptr != m_pixelBitmap)
@@ -527,7 +748,134 @@ public:
 					);
 					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
 				}
+				if (m_splitterHPos0 > 0)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(
+						static_cast<FLOAT>(XWIN0_WIDTH),
+						static_cast<FLOAT>(m_splitterHPos0),
+						static_cast<FLOAT>(m_splitterVPos), // m_cxySplitBar),
+						static_cast<FLOAT>(m_splitterHPos0 + SPLITLINE_WIDTH)
+					);
+					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
+				}
 
+				if (m_splitterHPos1 > 0)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(
+						static_cast<FLOAT>(m_splitterVPos),
+						static_cast<FLOAT>(m_rectClient.right),
+						static_cast<FLOAT>(m_splitterHPos1), // m_cxySplitBar),
+						static_cast<FLOAT>(m_splitterHPos1 + SPLITLINE_WIDTH)
+					);
+					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
+				}
+
+				if (m_splitterHPos > 0)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(
+						static_cast<FLOAT>(m_splitterVPos),
+						static_cast<FLOAT>(m_rectClient.right),
+						static_cast<FLOAT>(m_splitterHPos), // m_cxySplitBar),
+						static_cast<FLOAT>(m_splitterHPos + SPLITLINE_WIDTH)
+					);
+					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
+				}
+			}
+
+			// draw window 0
+			src = m_win0.Render();
+			if (nullptr != src)
+			{
+				ID2D1Bitmap* pBitmap = nullptr;
+				r = &m_rect0; w = r->right - r->left; h = r->bottom - r->top;
+				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
+					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
+				if (S_OK == hr && nullptr != pBitmap)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
+				}
+				SafeRelease(&pBitmap);
+			}
+
+			// draw window 1
+			src = m_win1.Render();
+			if (nullptr != src)
+			{
+				ID2D1Bitmap* pBitmap = nullptr;
+				r = &m_rect1; w = r->right - r->left; h = r->bottom - r->top;
+				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
+					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
+				if (S_OK == hr && nullptr != pBitmap)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
+				}
+				SafeRelease(&pBitmap);
+			}
+
+			// draw window 2
+			src = m_win2.Render();
+			if (nullptr != src)
+			{
+				ID2D1Bitmap* pBitmap = nullptr;
+				r = &m_rect2; w = r->right - r->left; h = r->bottom - r->top;
+				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
+					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
+				if (S_OK == hr && nullptr != pBitmap)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
+				}
+				SafeRelease(&pBitmap);
+			}
+
+			// draw window 3
+			src = m_win3.Render();
+			if (nullptr != src)
+			{
+				ID2D1Bitmap* pBitmap = nullptr;
+				r = &m_rect3; w = r->right - r->left; h = r->bottom - r->top;
+				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
+					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
+				if (S_OK == hr && nullptr != pBitmap)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
+				}
+				SafeRelease(&pBitmap);
+			}
+
+			// draw window 4
+			src = m_win4.Render();
+			if (nullptr != src)
+			{
+				ID2D1Bitmap* pBitmap = nullptr;
+				r = &m_rect4; w = r->right - r->left; h = r->bottom - r->top;
+				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
+					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
+				if (S_OK == hr && nullptr != pBitmap)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
+				}
+				SafeRelease(&pBitmap);
+			}
+
+			// draw window 5
+			src = m_win5.Render();
+			if (nullptr != src)
+			{
+				ID2D1Bitmap* pBitmap = nullptr;
+				r = &m_rect5; w = r->right - r->left; h = r->bottom - r->top;
+				hr = m_pD2DRenderTarget->CreateBitmap(D2D1::SizeU(w, h), src, (w << 2),
+					D2D1::BitmapProperties(D2D1::PixelFormat(DXGI_FORMAT_R8G8B8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED)), &pBitmap);
+				if (S_OK == hr && nullptr != pBitmap)
+				{
+					D2D1_RECT_F rect = D2D1::RectF(static_cast<FLOAT>(r->left), static_cast<FLOAT>(r->top), static_cast<FLOAT>(r->right), static_cast<FLOAT>(r->bottom));
+					m_pD2DRenderTarget->DrawBitmap(pBitmap, &rect);
+				}
+				SafeRelease(&pBitmap);
 			}
 
 			////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -559,11 +907,7 @@ public:
 			if(m_bProportionalDefPos)
 			{
 				ATLASSERT((m_xySplitterDefPos >= 0) && (m_xySplitterDefPos <= m_nPropMax));
-
-				if(m_bVertical)
-					xyPos = ::MulDiv(m_xySplitterDefPos, m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge, m_nPropMax);
-				else
-					xyPos = ::MulDiv(m_xySplitterDefPos, m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge, m_nPropMax);
+				xyPos = ::MulDiv(m_xySplitterDefPos, m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge, m_nPropMax);
 			}
 			else if(m_xySplitterDefPos != -1)
 			{
@@ -571,10 +915,7 @@ public:
 			}
 			else   // not set, use middle position
 			{
-				if(m_bVertical)
-					xyPos = (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) / 2;
-				else
-					xyPos = (m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge) / 2;
+				xyPos = (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) / 2;
 			}
 		}
 
@@ -589,7 +930,7 @@ public:
 		// Set new position and update if requested
 		bRet = (m_splitterVPos != xyPos);
 		m_splitterVPos = xyPos;
-#if 0
+
 		if(m_splitterVPos < m_splitterVPosToLeft)
 			m_splitterVPos = m_splitterVPosToLeft;
 
@@ -598,7 +939,7 @@ public:
 			m_splitterVPos = (m_rectClient.right - m_rectClient.left - m_splitterVPosToRight);
 			ATLASSERT(m_splitterVPos > m_splitterVPosToLeft);
 		}
-#endif
+
 		if(SPLIT_LEFTALIGNED & m_dwExtendedStyle)  // it is left aligned
 		{
 			m_splitterVPosOld = m_splitterVPos;
@@ -611,9 +952,7 @@ public:
 
 		if(m_bUpdateProportionalPos)
 		{
-			if(IsProportional())
-				StoreProportionalPos();
-			else if(IsRightAligned())
+			if(IsRightAligned())
 				StoreRightAlignPos();
 		}
 		else
@@ -630,55 +969,6 @@ public:
 	int GetSplitterPos() const
 	{
 		return m_splitterVPos;
-	}
-
-	void SetSplitterPosPct(int nPct, bool bUpdate = true)
-	{
-		ATLASSERT((nPct >= 0) && (nPct <= 100));
-
-		m_nProportionalPos = ::MulDiv(nPct, m_nPropMax, 100);
-		UpdateProportionalPos();
-
-		if(bUpdate)
-			UpdateSplitterLayout();
-	}
-
-	int GetSplitterPosPct() const
-	{
-		int cxyTotal = m_bVertical ? (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) : (m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge);
-		return ((cxyTotal > 0) && (m_splitterVPos >= 0)) ? ::MulDiv(m_splitterVPos, 100, cxyTotal) : -1;
-	}
-
-	bool SetSinglePaneMode(int nPane = SPLIT_PANE_NONE)
-	{
-		ATLASSERT((nPane == SPLIT_PANE_LEFT) || (nPane == SPLIT_PANE_RIGHT) || (nPane == SPLIT_PANE_NONE));
-		if(!((nPane == SPLIT_PANE_LEFT) || (nPane == SPLIT_PANE_RIGHT) || (nPane == SPLIT_PANE_NONE)))
-			return false;
-
-		if(nPane != SPLIT_PANE_NONE)
-		{
-//			if(::IsWindowVisible(m_hWndPane[nPane]) == FALSE)
-//				::ShowWindow(m_hWndPane[nPane], SW_SHOW);
-			int nOtherPane = (nPane == SPLIT_PANE_LEFT) ? SPLIT_PANE_RIGHT : SPLIT_PANE_LEFT;
-//			::ShowWindow(m_hWndPane[nOtherPane], SW_HIDE);
-			if(m_nDefActivePane != nPane)
-				m_nDefActivePane = nPane;
-		}
-		else if(m_nSinglePane != SPLIT_PANE_NONE)
-		{
-			int nOtherPane = (m_nSinglePane == SPLIT_PANE_LEFT) ? SPLIT_PANE_RIGHT : SPLIT_PANE_LEFT;
-//			::ShowWindow(m_hWndPane[nOtherPane], SW_SHOW);
-		}
-
-		m_nSinglePane = nPane;
-		UpdateSplitterLayout();
-
-		return true;
-	}
-
-	int GetSinglePaneMode() const
-	{
-		return m_nSinglePane;
 	}
 
 	DWORD GetSplitterExtendedStyle() const
@@ -705,54 +995,6 @@ public:
 		return dwPrevStyle;
 	}
 
-	// call to initiate moving splitter bar with keyboard
-	void MoveSplitterBar()
-	{
-		int x = 0;
-		int y = 0;
-		if(m_bVertical)
-		{
-			x = m_splitterVPos + (m_cxySplitBar / 2) + m_cxyBarEdge;
-			y = (m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge) / 2;
-		}
-		else
-		{
-			x = (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) / 2;
-			y = m_splitterVPos + (m_cxySplitBar / 2) + m_cxyBarEdge;
-		}
-
-		POINT pt = { x, y };
-		ClientToScreen(&pt);
-		::SetCursorPos(pt.x, pt.y);
-
-		m_splitterVPosNew = m_splitterVPos;
-		SetCapture();
-		//m_hWndFocusSave = pT->SetFocus();
-		::SetCursor(m_hCursorWE);
-		if(!m_bFullDrag)
-			DrawGhostBar();
-		if(m_bVertical)
-			m_cxyDragOffset = x - m_rectClient.left - m_splitterVPos;
-		else
-			m_cxyDragOffset = y - m_rectClient.top - m_splitterVPos;
-	}
-
-// Overrideables
-
-	// called only if pane is empty
-	void DrawSplitterPane(int nPane)
-	{
-#if 0		
-		RECT rect = {};
-		if(GetSplitterPaneRect(nPane, &rect))
-		{
-			if((GetExStyle() & WS_EX_CLIENTEDGE) == 0)
-				dc.DrawEdge(&rect, EDGE_SUNKEN, BF_RECT | BF_ADJUST);
-			dc.FillRect(&rect, COLOR_APPWORKSPACE);
-		}
-#endif		
-	}
-
 // Implementation - internal helpers
 	void Init()
 	{
@@ -774,10 +1016,7 @@ public:
 			{
 				if(GetSplitterPaneRect(nPane, &rect))
 				{
-//					if(m_hWndPane[nPane] != NULL)
-//						::SetWindowPos(m_hWndPane[nPane], NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER);
-//					else
-						InvalidateRect(&rect);
+					InvalidateRect(&rect);
 				}
 			}
 		}
@@ -785,10 +1024,7 @@ public:
 		{
 			if(GetSplitterPaneRect(m_nSinglePane, &rect))
 			{
-//				if(m_hWndPane[m_nSinglePane] != NULL)
-//					::SetWindowPos(m_hWndPane[m_nSinglePane], NULL, rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER);
-//				else
-					InvalidateRect(&rect);
+				InvalidateRect(&rect);
 			}
 		}
 	}
@@ -799,20 +1035,10 @@ public:
 		if((m_nSinglePane != SPLIT_PANE_NONE) || (m_splitterVPos == -1))
 			return false;
 
-		if(m_bVertical)
-		{
-			lpRect->left = m_rectClient.left + m_splitterVPos;
-			lpRect->top = m_rectClient.top;
-			lpRect->right = m_rectClient.left + m_splitterVPos + m_cxySplitBar + m_cxyBarEdge;
-			lpRect->bottom = m_rectClient.bottom;
-		}
-		else
-		{
-			lpRect->left = m_rectClient.left;
-			lpRect->top = m_rectClient.top + m_splitterVPos;
-			lpRect->right = m_rectClient.right;
-			lpRect->bottom = m_rectClient.top + m_splitterVPos + m_cxySplitBar + m_cxyBarEdge;
-		}
+		lpRect->left = m_rectClient.left + m_splitterVPos;
+		lpRect->top = m_rectClient.top;
+		lpRect->right = m_rectClient.left + m_splitterVPos + m_cxySplitBar + m_cxyBarEdge;
+		lpRect->bottom = m_rectClient.bottom;
 
 		return true;
 	}
@@ -831,37 +1057,17 @@ public:
 		}
 		else if(nPane == SPLIT_PANE_LEFT)
 		{
-			if(m_bVertical)
-			{
-				lpRect->left = m_rectClient.left;
-				lpRect->top = m_rectClient.top;
-				lpRect->right = m_rectClient.left + m_splitterVPos;
-				lpRect->bottom = m_rectClient.bottom;
-			}
-			else
-			{
-				lpRect->left = m_rectClient.left;
-				lpRect->top = m_rectClient.top;
-				lpRect->right = m_rectClient.right;
-				lpRect->bottom = m_rectClient.top + m_splitterVPos;
-			}
+			lpRect->left = m_rectClient.left;
+			lpRect->top = m_rectClient.top;
+			lpRect->right = m_rectClient.left + m_splitterVPos;
+			lpRect->bottom = m_rectClient.bottom;
 		}
 		else if(nPane == SPLIT_PANE_RIGHT)
 		{
-			if(m_bVertical)
-			{
-				lpRect->left = m_rectClient.left + m_splitterVPos + m_cxySplitBar + m_cxyBarEdge;
-				lpRect->top = m_rectClient.top;
-				lpRect->right = m_rectClient.right;
-				lpRect->bottom = m_rectClient.bottom;
-			}
-			else
-			{
-				lpRect->left = m_rectClient.left;
-				lpRect->top = m_rectClient.top + m_splitterVPos + m_cxySplitBar + m_cxyBarEdge;
-				lpRect->right = m_rectClient.right;
-				lpRect->bottom = m_rectClient.bottom;
-			}
+			lpRect->left = m_rectClient.left + m_splitterVPos + m_cxySplitBar + m_cxyBarEdge;
+			lpRect->top = m_rectClient.top;
+			lpRect->right = m_rectClient.right;
+			lpRect->bottom = m_rectClient.bottom;
 		}
 		else
 		{
@@ -883,32 +1089,26 @@ public:
 		if((m_splitterVPos == -1) || !IsOverSplitterRect(x, y))
 			return false;
 
-		return ((y >= m_splitterVPos) && (y < (m_splitterVPos + SPLITLINE_WIDTH)));
-	}
-
-	void DrawGhostBar()
-	{
+		return ((x >= m_splitterVPos) && (x < (m_splitterVPos + SPLITLINE_WIDTH)));
 	}
 
 	void GetSystemSettings(bool bUpdate)
 	{
 		if((m_dwExtendedStyle & SPLIT_FIXEDBARSIZE) == 0)
 		{
-			m_cxySplitBar = ::GetSystemMetrics(m_bVertical ? SM_CXSIZEFRAME : SM_CYSIZEFRAME);
+			m_cxySplitBar = ::GetSystemMetrics(SM_CXSIZEFRAME);
 		}
 
 		if((GetExStyle() & WS_EX_CLIENTEDGE) != 0)
 		{
-			m_cxyBarEdge = 2 * ::GetSystemMetrics(m_bVertical ? SM_CXEDGE : SM_CYEDGE);
+			m_cxyBarEdge = 2 * ::GetSystemMetrics(SM_CXEDGE);
 			m_cxyMin = 0;
 		}
 		else
 		{
 			m_cxyBarEdge = 0;
-			m_cxyMin = 2 * ::GetSystemMetrics(m_bVertical ? SM_CXEDGE : SM_CYEDGE);
+			m_cxyMin = 2 * ::GetSystemMetrics(SM_CXEDGE);
 		}
-
-		::SystemParametersInfo(SPI_GETDRAGFULLWINDOWS, 0, &m_bFullDrag, 0);
 
 		if(bUpdate)
 			UpdateSplitterLayout();
@@ -921,23 +1121,12 @@ public:
 
 	void StoreProportionalPos()
 	{
-		int cxyTotal = m_bVertical ? (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) : (m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge);
+		int cxyTotal = (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge);
 		if(cxyTotal > 0)
 			m_nProportionalPos = ::MulDiv(m_splitterVPos, m_nPropMax, cxyTotal);
 		else
 			m_nProportionalPos = 0;
 		//ATLTRACE2(atlTraceUI, 0, _T("CSplitterImpl::StoreProportionalPos - %i\n"), m_nProportionalPos);
-	}
-
-	void UpdateProportionalPos()
-	{
-		int cxyTotal = m_bVertical ? (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) : (m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge);
-		if(cxyTotal > 0)
-		{
-			int xyNewPos = ::MulDiv(m_nProportionalPos, cxyTotal, m_nPropMax);
-			m_bUpdateProportionalPos = false;
-			SetSplitterPos(xyNewPos, false);
-		}
 	}
 
 	bool IsRightAligned() const
@@ -947,24 +1136,13 @@ public:
 
 	void StoreRightAlignPos()
 	{
-		int cxyTotal = m_bVertical ? (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) : (m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge);
+		int cxyTotal = (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge);
 		if(cxyTotal > 0)
 			m_nProportionalPos = cxyTotal - m_splitterVPos;
 		else
 			m_nProportionalPos = 0;
 		//ATLTRACE2(atlTraceUI, 0, _T("CSplitterImpl::StoreRightAlignPos - %i\n"), m_nProportionalPos);
 	}
-
-	void UpdateRightAlignPos()
-	{
-		int cxyTotal = m_bVertical ? (m_rectClient.right - m_rectClient.left - m_cxySplitBar - m_cxyBarEdge) : (m_rectClient.bottom - m_rectClient.top - m_cxySplitBar - m_cxyBarEdge);
-		if(cxyTotal > 0)
-		{
-			m_bUpdateProportionalPos = false;
-			SetSplitterPos(cxyTotal - m_nProportionalPos, false);
-		}
-	}
-
 };
 
 #endif /* __WOCHAT_XWINDOW_H__ */

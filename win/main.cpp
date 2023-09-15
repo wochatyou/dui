@@ -1,12 +1,12 @@
 
-#include "wochat.h"
+#include "duiapp.h"
 #include "xbitmapdata.h"
 #include "resource.h"
 #include "xwindef.h"
 #include "xwindow.h"
 
 #if !defined(_WIN64)
-#error WoChat can only compiled in X64 mode
+#error DUIAPP can only compiled in X64 mode
 #endif
 
 #define XWIN_DEFAULT_DPI	96
@@ -14,13 +14,11 @@
 // global variables
 LONG 				g_threadCount = 0;
 UINT				g_Quit = 0;
-AppMode				g_Mode = modeTalk;
 HINSTANCE			g_hInstance = nullptr;
 
 static CAtlWinModule _Module;
 
-
-class CWoChatThreadManager
+class CDUIThreadManager
 {
 public:
 	// the main UI thread proc
@@ -62,7 +60,7 @@ public:
 	DWORD m_dwCount = 0;
 	HANDLE m_arrThreadHandles[MAXIMUM_WAIT_OBJECTS - 1];
 
-	CWoChatThreadManager()
+	CDUIThreadManager()
 	{ 
 		for (int i = 0; i < (MAXIMUM_WAIT_OBJECTS - 1); i++)
 			m_arrThreadHandles[i] = nullptr;
@@ -142,19 +140,6 @@ public:
 static int InitInstance(HINSTANCE hInstance)
 {
 	int iRet = 0;
-#if 0	
-	HRESULT hr = S_OK;
-	
-	g_DotsPerInch = XWIN_DEFAULT_DPI;
-
-	g_pD2DFactory = nullptr;
-	hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pD2DFactory);
-	if (S_OK != hr || nullptr == g_pD2DFactory)
-	{
-		MessageBox(NULL, _T("The calling of D2D1CreateFactory() is failed"), _T("WoChat Error"), MB_OK);
-		return (-1);
-	}
-#endif
 	return iRet;
 }
 
@@ -164,8 +149,6 @@ static void ExitInstance(HINSTANCE hInstance)
 
 	// tell all threads to quit
 	InterlockedIncrement(&g_Quit);
-
-	//SafeRelease(&g_pD2DFactory);
 
 	// wait for all threads to quit gracefully
 	tries = 10;
@@ -203,7 +186,7 @@ int WINAPI  _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 
 	// BLOCK: Run application
 	{
-		CWoChatThreadManager mgr;
+		CDUIThreadManager mgr;
 		iRet = mgr.Run(lpCmdLine, nShowCmd);
 	}
 

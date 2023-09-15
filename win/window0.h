@@ -1,7 +1,7 @@
-#ifndef __WOCHAT_WINDOWS0_H__
-#define __WOCHAT_WINDOWS0_H__
+#ifndef __DUI_WINDOW0_H__
+#define __DUI_WINDOW0_H__
 
-#include "xwindui.h"
+#include "dui/dui_win.h"
 
 enum 
 {
@@ -76,7 +76,7 @@ public:
 		m_backgroundColor = 0xFF2A2928;
 		m_buttonStartIdx = XWIN0_BUTTON_ME;
 		m_buttonEndIdx = XWIN0_BUTTON_NETWORK;
-		m_property |= (XWIN_PROP_MOVEWIN | XWIN_PROP_BTNACTIVE);
+		m_property |= (DUI_PROP_MOVEWIN | DUI_PROP_BTNACTIVE);
 		m_message = WM_WIN0_MESSAGE;
 	}
 	~XWindow0() {}
@@ -111,14 +111,6 @@ public:
 		bmp = button->imgNormal;
 		button->bottom = bottom - (gap>>1);
 		button->top = button->bottom - bmp->h;
-#if 0
-		id = XWIN0_BUTTON_BITCOIN; button = &m_button[id];
-		bmp = button->imgNormal;
-		button->right = XWIN0_WIDTH - gap;
-		button->left = button->right - bmp->w;
-		button->bottom = h - 8;
-		button->top = button->bottom - bmp->h;
-#endif
 	}
 
 	void UpdatePosition()
@@ -129,7 +121,7 @@ public:
 	int DoSize(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
 		UpdateButtonPosition();
-		return XWIN_STATUS_NEEDRAW;
+		return DUI_STATUS_NEEDRAW;
 	}
 
 private:
@@ -308,20 +300,10 @@ private:
 		button->left = ((w - bitmap->w) >> 1);
 		button->right = button->left + bitmap->w;
 		button->property |= XBUTTON_PROP_STATIC;
-#if 0
-		id = XWIN0_BUTTON_BITCOIN; button = &m_button[id]; button->id = id;
-		bitmap = &m_bitmap[XWIN0_BITMAP_BITCOINN]; button->imgNormal = bitmap;
-		bitmap = &m_bitmap[XWIN0_BITMAP_BITCOINH]; button->imgHover = bitmap;
-		bitmap = &m_bitmap[XWIN0_BITMAP_BITCOINP]; button->imgPress = bitmap;
-		bitmap = &m_bitmap[XWIN0_BITMAP_BITCOINA]; button->imgActive = bitmap;
-		button->left = ((w - bitmap->w) >> 1);
-		button->right = button->left + bitmap->w;
-		button->property |= XBUTTON_PROP_STATIC;
-#endif
 		return 0;
 	}
 
 };
 
-#endif  /* __WOCHAT_WINDOWS0_H__ */
+#endif  /* __DUI_WINDOW0_H__ */
 

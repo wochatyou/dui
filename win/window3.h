@@ -1,7 +1,7 @@
 #ifndef __WOCHAT_WINDOWS3_H__
 #define __WOCHAT_WINDOWS3_H__
 
-#include "xwindui.h"
+#include "dui/dui_win.h"
 
 uint16_t titlewin3[] = { 0x0044,0x0042,0x0041,0x57f9,0x8bad,0x7fa4,0x0028,0x0032,0x0035,0x0037,0x0029,0x0000 };
 enum 
@@ -34,16 +34,15 @@ public:
 		m_backgroundColor = 0xFFF5F5F5;
 		m_buttonStartIdx = XWIN3_BUTTON_DOT;
 		m_buttonEndIdx = XWIN3_BUTTON_DOT;
-		m_property |= XWIN_PROP_MOVEWIN;
+		m_property |= DUI_PROP_MOVEWIN;
 		m_message = WM_WIN3_MESSAGE;
+
+		InitButtons();
 	}
 
 	~XWindow3()
 	{
 	}
-
-	BLFont   m_font;
-	uint16_t* m_title = (uint16_t*)titlewin3;
 
 	static int ButtonAction(void* obj, U32 uMsg, U64 wParam, U64 lParam)
 	{
@@ -95,6 +94,9 @@ public:
 		int h = m_area.bottom - m_area.top;
 		XButton* button = &m_button[XWIN3_BUTTON_DOT];
 		XBitmap* bmp = button->imgNormal;
+
+		assert(nullptr != bmp);
+
 		button->right = w - GAP_RIGHT3;
 		button->bottom = h - GAP_BOTTOM3;
 		button->left = button->right - bmp->w;
@@ -112,15 +114,7 @@ public:
 
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
-		int ret = 0;
-		BLResult blResult;
-
-		InitButtons();
-
-		blResult = m_font.createFromFace(g_fontFace, 17.0f);
-		if (BL_SUCCESS != blResult)
-			return (-1);
-
+		//InitButtons();
 		return 0;
 	}
 
@@ -135,45 +129,12 @@ public:
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 
-		if (nullptr != m_title)
-		{
-			BLRgba32 color(0xFF535353u);
-			BLRgba32 bkcolor(m_backgroundColor);
-			BLRgba32 selcolor(0xFFFACE87u);
-			BLImageData imgdata = { 0 };
-			BLGlyphBuffer gb;
-			BLImage img;
-			BLResult blResult = img.create(WOCHAT_ALIGN_DEFAULT32(w - 100), h, BL_FORMAT_PRGB32);
-			if (BL_SUCCESS == blResult)
-			{
-				BLContext ctx(img);
-				ctx.fillAll(bkcolor);
-				//ctx.fillBox(0, 24, 90, 45, selcolor);
-				gb.setUtf16Text((const uint16_t*)m_title);
-				m_font.shape(gb);
-				ctx.fillGlyphRun(BLPoint(4, 40), m_font, gb.glyphRun(), color);
-				ctx.end();
-
-				blResult = img.getData(&imgdata);
-				if (BL_SUCCESS == blResult)
-				{
-					ScreenDrawRect(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, 0, 0);
-				}
-			}
-		}
 		return 0;
 	}
 
 	int UpdateTitle(uint16_t* title)
 	{
-		int ret = XWIN_STATUS_NODRAW;
-		if (nullptr != title)
-		{
-			m_title = title;
-			m_status |= XWIN_STATUS_NEEDRAW;
-			ret = XWIN_STATUS_NEEDRAW;
-		}
-		return ret;
+		return 0;
 	}
 };
 
