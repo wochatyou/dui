@@ -93,8 +93,8 @@ private:
 	int m_splitterVPos = -1;               // splitter bar position
 	int m_splitterVPosNew = -1;            // internal - new position while moving
 	int m_splitterVPosOld = -1;            // keep align value
-	int m_splitterVPosToLeft  = 200;       // the minum pixel to the left of the client area.
-	int m_splitterVPosToRight = 200;       // the minum pixel to the right of the client area.
+	int m_splitterVPosToLeft  = 300;       // the minum pixel to the left of the client area.
+	int m_splitterVPosToRight = 400;       // the minum pixel to the right of the client area.
 
 	int m_marginLeft = 64;
 	int m_marginRight = 0;
@@ -103,8 +103,8 @@ private:
 	int m_splitterHPosNew = -1;
 	int m_splitterHPosOld = -1;
 
-	int m_splitterHPos0 = XWIN1_HEIGHT;
-	int m_splitterHPos1 = XWIN3_HEIGHT;
+	int m_splitterHPosfix0 = XWIN1_HEIGHT;
+	int m_splitterHPosfix1 = XWIN3_HEIGHT;
 
 	int m_nDefActivePane = SPLIT_PANE_NONE;
 	int m_cxySplitBar = SPLITLINE_WIDTH;  // splitter bar width/height
@@ -138,6 +138,13 @@ public:
 	XWindow() 
 	{
 		m_rectClient.left = m_rectClient.right = m_rectClient.top = m_rectClient.bottom = 0;
+
+		m_win0.SetWindowId((const U8*)"DUIWin0", 7);
+		m_win1.SetWindowId((const U8*)"DUIWin1", 7);
+		m_win2.SetWindowId((const U8*)"DUIWin2", 7);
+		m_win3.SetWindowId((const U8*)"DUIWin3", 7);
+		m_win4.SetWindowId((const U8*)"DUIWin4", 7);
+		m_win5.SetWindowId((const U8*)"DUIWin5", 7);
 	}
 
 	~XWindow() 
@@ -362,14 +369,14 @@ public:
 			r->left = XWIN0_WIDTH;
 			r->right = m_splitterVPos;
 			r->top = m_rectClient.top;
-			r->bottom = m_splitterHPos0;
+			r->bottom = m_splitterHPosfix0;
 			m_win1.OnSize(uMsg, wParam, (LPARAM)r, dst);
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
 			dst += size;
 
 			r->left = XWIN0_WIDTH;
 			r->right = m_splitterVPos;
-			r->top = m_splitterHPos0 + SPLITLINE_WIDTH;
+			r->top = m_splitterHPosfix0 + SPLITLINE_WIDTH;
 			r->bottom = m_rectClient.bottom;
 			m_win2.OnSize(uMsg, wParam, (LPARAM)r, dst);
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
@@ -378,14 +385,14 @@ public:
 			r->left = m_splitterVPos + SPLITLINE_WIDTH;
 			r->right = m_rectClient.right;
 			r->top = m_rectClient.top;
-			r->bottom = m_splitterHPos1;
+			r->bottom = m_splitterHPosfix1;
 			m_win3.OnSize(uMsg, wParam, (LPARAM)r, dst);
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
 			dst += size;
 
 			r->left = m_splitterVPos + SPLITLINE_WIDTH;
 			r->right = m_rectClient.right;
-			r->top = m_splitterHPos1 + SPLITLINE_WIDTH;
+			r->top = m_splitterHPosfix1 + SPLITLINE_WIDTH;
 			r->bottom = m_splitterHPos;
 			m_win4.OnSize(uMsg, wParam, (LPARAM)r, dst);
 			size = (U32)((r->right - r->left) * (r->bottom - r->top));
@@ -425,9 +432,14 @@ public:
 
 			if(m_splitterVPos != newSplitPosV)
 			{
-				if (SetSplitterPos(newSplitPosV, true))
-					needReDraw = 1;
+				if (newSplitPosV >= m_splitterVPosToLeft && newSplitPosV < (m_rectClient.right - m_rectClient.left - SPLITLINE_WIDTH - m_splitterVPosToRight))
+				{
+					if (SetSplitterPos(newSplitPosV, true))
+						needReDraw = 1;
+				}
 			}
+
+			if(needReDraw);
 			{
 				// window 0 does not need to change
 				RECT area;
@@ -441,25 +453,25 @@ public:
 				dst += size;
 
 				// windows 1
-				r->left = r->right; r->right = newSplitPosV; r->top = m_rectClient.top; r->bottom = m_splitterHPos0;
+				r->left = r->right; r->right = m_splitterVPos; r->top = m_rectClient.top; r->bottom = m_splitterHPosfix0;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win1.SetPosition(r, dst, size);
 				dst += size;
 
 				// windows 2
-				r->top = m_splitterHPos0 + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
+				r->top = m_splitterHPosfix0 + SPLITLINE_WIDTH; r->bottom = m_rectClient.bottom;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win2.SetPosition(r, dst, size);
 
 				// windows 3
 				dst += size;
-				r->left = newSplitPosV + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_rectClient.top; r->bottom = m_splitterHPos1;
+				r->left = m_splitterVPos + SPLITLINE_WIDTH; r->right = m_rectClient.right; r->top = m_rectClient.top; r->bottom = m_splitterHPosfix1;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win3.SetPosition(r, dst, size);
 
 				// windows 4
 				dst += size;
-				r->top = m_splitterHPos1 + SPLITLINE_WIDTH; r->bottom = m_splitterHPos;
+				r->top = m_splitterHPosfix1 + SPLITLINE_WIDTH; r->bottom = m_splitterHPos;
 				size = (U32)((r->right - r->left) * (r->bottom - r->top));
 				m_win4.SetPosition(r, dst, size);
 
@@ -603,12 +615,15 @@ public:
 					::GetCursorPos(&pt);
 					int xyPos = m_splitterVPos + ((wParam == VK_LEFT) ? -m_cxyStep : m_cxyStep);
 					int cxyMax = m_rectClient.right - m_rectClient.left;
-					if(xyPos < (m_cxyMin + m_cxyBarEdge))
-						xyPos = m_cxyMin;
-					else if(xyPos > (cxyMax - m_cxySplitBar - m_cxyBarEdge - m_cxyMin))
-						xyPos = cxyMax - m_cxySplitBar - m_cxyBarEdge - m_cxyMin;
-					pt.x += xyPos - m_splitterVPos;
-					::SetCursorPos(pt.x, pt.y);
+
+					ATLASSERT(m_splitterVPosToLeft > 100);
+					ATLASSERT(m_splitterVPosToRight > 100);
+
+					if (xyPos >= m_splitterVPosToLeft && xyPos < (cxyMax - SPLITLINE_WIDTH - m_splitterVPosToRight))
+					{
+						pt.x += xyPos - m_splitterVPos;
+						::SetCursorPos(pt.x, pt.y);
+					}
 				}
 				break;
 			case VK_UP:
@@ -744,24 +759,24 @@ public:
 					);
 					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
 				}
-				if (m_splitterHPos0 > 0)
+				if (m_splitterHPosfix0 > 0)
 				{
 					D2D1_RECT_F rect = D2D1::RectF(
 						static_cast<FLOAT>(XWIN0_WIDTH),
-						static_cast<FLOAT>(m_splitterHPos0),
+						static_cast<FLOAT>(m_splitterHPosfix0),
 						static_cast<FLOAT>(m_splitterVPos),
-						static_cast<FLOAT>(m_splitterHPos0 + SPLITLINE_WIDTH)
+						static_cast<FLOAT>(m_splitterHPosfix0 + SPLITLINE_WIDTH)
 					);
 					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
 				}
 
-				if (m_splitterHPos1 > 0)
+				if (m_splitterHPosfix1 > 0)
 				{
 					D2D1_RECT_F rect = D2D1::RectF(
 						static_cast<FLOAT>(m_splitterVPos + SPLITLINE_WIDTH),
-						static_cast<FLOAT>(m_splitterHPos1),
+						static_cast<FLOAT>(m_splitterHPosfix1),
 						static_cast<FLOAT>(m_rectClient.right),
-						static_cast<FLOAT>(m_splitterHPos1 + SPLITLINE_WIDTH)
+						static_cast<FLOAT>(m_splitterHPosfix1 + SPLITLINE_WIDTH)
 					);
 					m_pD2DRenderTarget->DrawBitmap(m_pixelBitmap, &rect);
 				}

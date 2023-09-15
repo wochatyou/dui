@@ -35,27 +35,10 @@
 #include <fcntl.h>
 #include <io.h>
 #include <process.h>
-//#include <winsock2.h>
 #include <memoryapi.h>
 
 #include <cassert>
 #include <string>
-
-#define S8      int8_t
-#define S16     int16_t
-#define S32     int32_t
-#define S64     int64_t
-
-#define U8      uint8_t
-#define U16     uint16_t
-#define U32     uint32_t
-#define U64     uint64_t
-
-/* DUI_ALIGN() is only to be used to align on a power of 2 boundary */
-#define DUI_ALIGN(size, boundary) (((size) + ((boundary) -1)) & ~((boundary) - 1))
-#define DUI_ALIGN_DEFAULT32(size)	DUI_ALIGN(size, 4)
-#define DUI_ALIGN_DEFAULT64(size)	DUI_ALIGN(size, 8)		/** Default alignment */
-#define DUI_ALIGN_PAGE(size)		    DUI_ALIGN(size, 1<<16)
 
 extern UINT				g_Quit;
 extern LONG				g_threadCount;

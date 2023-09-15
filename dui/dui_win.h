@@ -110,7 +110,7 @@ public:
 	void*	m_hWnd = nullptr;
 	U32*    m_screen = nullptr;
 	U32		m_size = 0;
-	U8      m_Id;
+	U8      m_Id[8] = { 0 }; // for debugging 
 	XRECT   m_area = { 0 };
 
 	int     m_buttonStartIdx = 0;
@@ -192,9 +192,15 @@ public:
 		return false;
 #endif
 	}
-	void SetWindowId(U8 id)
+	void SetWindowId(const U8* id, U8 bytes)
 	{
-		m_Id = id;
+		if (bytes > 7)
+			bytes = 7;
+
+		for(U8 i=0; i<bytes; i++)
+			m_Id[i] = *id++;
+
+		m_Id[bytes] = 0;
 	}
 
 	bool IsVisible() const
