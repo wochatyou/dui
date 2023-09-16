@@ -297,6 +297,15 @@ public:
 		return 0;
 	}
 
+	int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		if (DUI_STATUS_ISFOCUS & m_status)
+		{
+			m_status &= ~DUI_STATUS_ISFOCUS;
+			return 1;
+		}
+		return 0;
+	}
 };
 
 #endif  /* __WOCHAT_WINDOWS5_H__ */

@@ -53,16 +53,13 @@ void SafeRelease(T** ppT)
 	}
 }
 
-// Splitter panes constants
-#define SPLIT_PANE_LEFT			 0
-#define SPLIT_PANE_RIGHT		 1
-#define SPLIT_PANE_NONE			-1
-
 // Splitter extended styles
 #define SPLIT_PROPORTIONAL		0x00000001
 #define SPLIT_NONINTERACTIVE	0x00000002
 #define SPLIT_LEFTALIGNED		0x00000004
 #define SPLIT_BOTTOMLIGNED		0x00000008
+
+#define XWIN_500MS_TIMER		123
 
 class XWindow : public ATL::CWindowImpl<XWindow>
 {
@@ -149,6 +146,7 @@ public:
 	BEGIN_MSG_MAP(XWindow)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
 		MESSAGE_HANDLER(WM_PAINT, OnPaint)
+		MESSAGE_HANDLER(WM_TIMER, OnTimer)
 		MESSAGE_HANDLER(WM_MOUSEMOVE, OnMouseMove)
 		MESSAGE_HANDLER(WM_LBUTTONDOWN, OnLButtonDown)
 		MESSAGE_HANDLER(WM_LBUTTONUP, OnLButtonUp)
@@ -172,6 +170,8 @@ public:
 
 	LRESULT OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		KillTimer(XWIN_500MS_TIMER);
+
 		m_win0.OnDestroy(uMsg, wParam, lParam);
 		m_win1.OnDestroy(uMsg, wParam, lParam);
 		m_win2.OnDestroy(uMsg, wParam, lParam);
@@ -226,6 +226,20 @@ public:
 			PostMessage(WM_CLOSE);
 			return 0;
 		}
+
+		SetTimer(XWIN_500MS_TIMER, 500);
+
+		return 0;
+	}
+
+	LRESULT OnTimer(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		int r0 = m_win0.OnTimer(uMsg, wParam, lParam);
+		int r1 = m_win1.OnTimer(uMsg, wParam, lParam);
+		int r2 = m_win2.OnTimer(uMsg, wParam, lParam);
+		int r3 = m_win3.OnTimer(uMsg, wParam, lParam);
+		int r4 = m_win4.OnTimer(uMsg, wParam, lParam);
+		int r5 = m_win5.OnTimer(uMsg, wParam, lParam);
 
 		return 0;
 	}

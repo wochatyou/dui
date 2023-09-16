@@ -29,6 +29,25 @@ typedef struct tagXRECT
 	int    bottom;
 } XRECT;
 
+class XControl
+{
+public:
+	U16  id_;
+	U8   prop_;  // properties
+	U8   status_; // status
+	U8   prev_status_; // previous status
+	U8   cursor_;
+
+	int  left_;
+	int  top_;
+	int  right_;
+	int  bottom_;
+
+public:
+	int (*pfnAction) (void* obj, U32 uMsg, U64 wParam, U64 lParam);
+};
+
+
 
 // a pure 32-bit true color bitmap object
 typedef struct XBitmap
@@ -91,8 +110,8 @@ enum
 	DUI_PROP_NONE		  = 0x00,   // None Properties
 	DUI_PROP_MOVEWIN	  = 0x01,   // Move the whole window while LButton is pressed
 	DUI_PROP_BTNACTIVE	  = 0x02,   // no active button on this virutal window
-	DUI_PROP_HASVSCROLL  = 0x04,    // have vertical scroll bar
-	DUI_PROP_HASHSCROLL  = 0x08   
+	DUI_PROP_HASVSCROLL   = 0x04,    // have vertical scroll bar
+	DUI_PROP_HASHSCROLL   = 0x08   
 };
 
 enum
@@ -102,6 +121,14 @@ enum
 	DEFAULT_SCROLLTHUMB_COLOR   = 0xFFB9B4B2
 };
 
+#define DUI_MAX_INPUTSTRING		(1<<16)		// maximu input string
+
+class XEditBox
+{
+public:
+	U32	m_backgroundColor;
+	U16 m_text[DUI_MAX_INPUTSTRING] = { 0 };
+};
 
 template <class T>
 class DUI_NO_VTABLE XWindowT
@@ -131,10 +158,12 @@ public:
 #else
 	void*  m_cursorHand = nullptr;
 #endif
-	U32	     m_message = 0;
-	U32      m_backgroundColor = DEFAULT_BACKGROUND_COLOR;
-	U32      m_scrollbarColor = DEFAULT_SCROLLBKG_COLOR;
-	U32      m_thumbColor = DEFAULT_SCROLLTHUMB_COLOR;
+	U32  m_status = DUI_STATUS_VISIBLE;
+	U32  m_property = DUI_PROP_NONE;
+	U32	 m_message = 0;
+	U32  m_backgroundColor = DEFAULT_BACKGROUND_COLOR;
+	U32  m_scrollbarColor = DEFAULT_SCROLLBKG_COLOR;
+	U32  m_thumbColor = DEFAULT_SCROLLTHUMB_COLOR;
 
 	enum {
 		MAX_BUTTONS = 16,
@@ -143,9 +172,6 @@ public:
 
 	XButton	 m_button[MAX_BUTTONS];
 	XBitmap	 m_bitmap[MAX_BUTTON_BITMAPS];
-
-	U8	m_status = DUI_STATUS_VISIBLE;
-	U8  m_property = DUI_PROP_NONE;
 
 public:
 	XWindowT()
@@ -464,6 +490,15 @@ public:
 		return DUI_STATUS_NEEDRAW;
 	}
 
+	int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		T* pT = static_cast<T*>(this);
+		pT->DoTimer(uMsg, wParam, lParam, lpData);
+
+		return 0;
+	}
+
 	int DoMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
 	int OnMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
@@ -613,6 +648,9 @@ public:
 			int w = m_area.right - m_area.left;
 			int h = m_area.bottom - m_area.top;
 
+			// the mouse click my area, so I have the focus
+			m_status |= DUI_STATUS_ISFOCUS; 
+
 			// handle the vertical bar
 			if (DUI_PROP_HASVSCROLL & m_property)
 			{
@@ -688,6 +726,10 @@ public:
 				if (DUI_PROP_MOVEWIN & m_property)
 					PostWindowMessage(WM_NCLBUTTONDOWN, HTCAPTION, lParam);
 			}
+		}
+		else
+		{
+			m_status &= ~DUI_STATUS_ISFOCUS; // this window lose focus
 		}
 
 		// if the state is not equal to the previous state, we need to redraw it

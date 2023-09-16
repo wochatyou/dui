@@ -15,6 +15,7 @@
 LONG 				g_threadCount = 0;
 UINT				g_Quit = 0;
 HINSTANCE			g_hInstance = nullptr;
+BLFontFace			g_fontFace;
 
 static CAtlWinModule _Module;
 
@@ -138,6 +139,63 @@ public:
 static int InitInstance(HINSTANCE hInstance)
 {
 	int iRet = 0;
+	BYTE* fontData;
+	DWORD fontSize;
+	HRSRC  res;
+	HGLOBAL res_handle;
+	HRESULT hr = S_OK;
+
+	/* load the build-in font file(*.ttf) */
+	res = FindResource(hInstance, MAKEINTRESOURCE(IDR_DEFAULTFONT), RT_RCDATA);
+	if (NULL == res)
+	{
+		MessageBox(NULL, _T("Cannot find the default font resource within the exe file!"), _T("Error"), MB_OK);
+		return (-1);
+	}
+
+	res_handle = LoadResource(hInstance, res);
+	if (NULL == res_handle)
+	{
+		MessageBox(NULL, _T("Cannot load the default font resource within the exe file!"), _T("Error"), MB_OK);
+		return (-1);
+	}
+
+	fontData = (BYTE*)LockResource(res_handle);
+	fontSize = SizeofResource(hInstance, res);
+	if (NULL == fontData || 0 == fontSize)
+	{
+		MessageBox(NULL, _T("Cannot lock the default font resource within the exe file!"), _T("Error"), MB_OK);
+		return (-1);
+	}
+
+	{
+		BLResult blRet;
+		BLFontData fd;
+		BLString fontName;
+		blRet = fd.createFromData(fontData, fontSize);
+		if (BL_SUCCESS != blRet)
+		{
+			MessageBox(NULL, _T("Cannot create font data the default font resource within the exe file!"), _T("Error"), MB_OK);
+			return (-1);
+		}
+		blRet = blFontFaceInit(&g_fontFace);
+		if (BL_SUCCESS != blRet)
+		{
+			MessageBox(NULL, _T("Cannot Initialize g_fontFace!"), _T("WoChat Error"), MB_OK);
+			return (-1);
+		}
+		blRet = g_fontFace.createFromData(fd, 0);
+		if (BL_SUCCESS != blRet)
+		{
+			MessageBox(NULL, _T("Cannot create font face the default font resource within the exe file!"), _T("Error"), MB_OK);
+			return (-1);
+		}
+		fontName = g_fontFace.familyName();
+		fontName = g_fontFace.fullName();
+		fontName = g_fontFace.subfamilyName();
+	}
+
+
 	return iRet;
 }
 

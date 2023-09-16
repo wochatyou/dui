@@ -40,9 +40,12 @@
 #include <cassert>
 #include <string>
 
+#include "blend2d/src/blend2d.h"
+
 extern UINT				g_Quit;
 extern LONG				g_threadCount;
 extern HINSTANCE		g_hInstance;
+extern BLFontFace		g_fontFace;
 
 #endif  /* __DUIAPP_H__ */
 

@@ -2,6 +2,9 @@
 #define __WOCHAT_WINDOWS1_H__
 
 #include "dui/dui_win.h"
+#include "dui/imstb_textedit.h"
+
+U16 txt[] = { 0x0044,0x0042,0x0041,0x57f9,0x8bad,0x7fa4,0x0028,0x0032,0x0035,0x0037,0x0029,0x0000 };
 
 enum
 {
@@ -31,6 +34,9 @@ public:
 	}
 
 	~XWindow1()	{}
+
+	BLFont	m_font;
+	U16*	m_text = (U16*)txt;
 
 	static int ButtonAction(void* obj, U32 uMsg, U64 wParam, U64 lParam)
 	{
@@ -104,8 +110,60 @@ public:
 
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
-		int ret = InitButtons();
+		int ret = 0;
+		BLResult blResult;
+
+		InitButtons();
+
+		blResult = m_font.createFromFace(g_fontFace, 17.0f);
+		if (BL_SUCCESS != blResult)
+			return (-1);
+
 		return ret;
+	}
+
+	int Draw()
+	{
+		int w = m_area.right - m_area.left;
+		int h = m_area.bottom - m_area.top;
+
+		if (nullptr != m_text)
+		{
+			BLImage img;
+			BLResult blResult = img.create(DUI_ALIGN_DEFAULT32(w - 100), h, BL_FORMAT_PRGB32);
+			if (BL_SUCCESS == blResult)
+			{
+				BLRgba32 color(0xFF535353u);
+				BLRgba32 bkcolor(m_backgroundColor);
+				BLRgba32 selcolor(0xFFFACE87u);
+				BLImageData imgdata = { 0 };
+				BLGlyphBuffer gb;
+				BLContext ctx(img);
+
+				ctx.fillAll(bkcolor);
+				ctx.fillBox(0, 14, 60, 35, selcolor);
+				gb.setUtf16Text((const uint16_t*)m_text);
+				m_font.shape(gb);
+				ctx.fillGlyphRun(BLPoint(4, 30), m_font, gb.glyphRun(), color);
+				ctx.end();
+
+				blResult = img.getData(&imgdata);
+				if (BL_SUCCESS == blResult)
+				{
+					ScreenDrawRect(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, 40, 0);
+				}
+			}
+		}
+		return 0;
+	}
+
+	int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) 
+	{ 
+		if (DUI_STATUS_ISFOCUS & m_status)
+		{
+			return 1;
+		}
+		return 0; 
 	}
 };
 
