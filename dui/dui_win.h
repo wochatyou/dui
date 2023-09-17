@@ -1,7 +1,37 @@
 #ifndef __DUI_WIN_H__
 #define __DUI_WIN_H__
 
-#include "dui.h"
+#include <stdint.h>
+
+#define S8      int8_t
+#define S16     int16_t
+#define S32     int32_t
+#define S64     int64_t
+
+#define U8      uint8_t
+#define U16     uint16_t
+#define U32     uint32_t
+#define U64     uint64_t
+
+/* DUI_ALIGN() is only to be used to align on a power of 2 boundary */
+#define DUI_ALIGN(size, boundary) (((size) + ((boundary) -1)) & ~((boundary) - 1))
+#define DUI_ALIGN_DEFAULT32(size)	DUI_ALIGN(size, 4)
+#define DUI_ALIGN_DEFAULT64(size)	DUI_ALIGN(size, 8)		/** Default alignment */
+#define DUI_ALIGN_PAGE(size)		DUI_ALIGN(size, 1<<16)
+
+
+int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color);
+
+int ScreenDrawHLine(uint32_t* dst, int w, int h, int position, int stroke, uint32_t color);
+
+int ScreenDrawRect(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy);
+
+int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy);
+
+int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color);
+
+int ScreenFillRectRound(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy, uint32_t c1, uint32_t c2);
+
 
 #ifdef _MSC_VER
 #define DUI_NO_VTABLE __declspec(novtable)
@@ -29,26 +59,6 @@ typedef struct tagXRECT
 	int    bottom;
 } XRECT;
 
-class XControl
-{
-public:
-	U16  id_;
-	U8   prop_;  // properties
-	U8   status_; // status
-	U8   prev_status_; // previous status
-	U8   cursor_;
-
-	int  left_;
-	int  top_;
-	int  right_;
-	int  bottom_;
-
-public:
-	int (*pfnAction) (void* obj, U32 uMsg, U64 wParam, U64 lParam);
-};
-
-
-
 // a pure 32-bit true color bitmap object
 typedef struct XBitmap
 {
@@ -57,6 +67,21 @@ typedef struct XBitmap
 	int	  w;
 	int	  h;
 } XBitmap;
+
+enum XButtonProperty
+{
+	XBUTTON_PROP_ROUND = 0x01,
+	XBUTTON_PROP_STATIC = 0x02
+};
+
+enum XButtonState
+{
+	XBUTTON_STATE_HIDDEN = 0,
+	XBUTTON_STATE_NORMAL,
+	XBUTTON_STATE_HOVERED,
+	XBUTTON_STATE_PRESSED,
+	XBUTTON_STATE_ACTIVE
+};
 
 typedef struct XButton
 {
@@ -76,23 +101,51 @@ typedef struct XButton
 	int (*pfAction) (void* obj, U32 uMsg, U64 wParam, U64 lParam);
 } XButton;
 
-enum XButtonProperty
-{
-	XBUTTON_PROP_ROUND  = 0x01,
-	XBUTTON_PROP_STATIC = 0x02
-};
-
-enum XButtonState
-{
-	XBUTTON_STATE_HIDDEN = 0,
-	XBUTTON_STATE_NORMAL,
-	XBUTTON_STATE_HOVERED,
-	XBUTTON_STATE_PRESSED,
-	XBUTTON_STATE_ACTIVE
-};
-
 // determin if one object is hitted
 #define XWinPointInRect(x, y, OBJ)		(((x) >= ((OBJ)->left)) && ((x) < ((OBJ)->right)) && ((y) >= ((OBJ)->top)) && ((y)<((OBJ)->bottom)))
+
+#define DUI_MAX_EDITSTRING		(1<<10)		// maximu input string
+
+
+// We don't use an enum so we can build even with conflicting symbols (if another user of stb_textedit.h leak their STB_TEXTEDIT_K_* symbols)
+#define XSTB_TEXTEDIT_K_LEFT         0x200000 // keyboard input to move cursor left
+#define XSTB_TEXTEDIT_K_RIGHT        0x200001 // keyboard input to move cursor right
+#define XSTB_TEXTEDIT_K_UP           0x200002 // keyboard input to move cursor up
+#define XSTB_TEXTEDIT_K_DOWN         0x200003 // keyboard input to move cursor down
+#define XSTB_TEXTEDIT_K_LINESTART    0x200004 // keyboard input to move cursor to start of line
+#define XSTB_TEXTEDIT_K_LINEEND      0x200005 // keyboard input to move cursor to end of line
+#define XSTB_TEXTEDIT_K_TEXTSTART    0x200006 // keyboard input to move cursor to start of text
+#define XSTB_TEXTEDIT_K_TEXTEND      0x200007 // keyboard input to move cursor to end of text
+#define XSTB_TEXTEDIT_K_DELETE       0x200008 // keyboard input to delete selection or character under cursor
+#define XSTB_TEXTEDIT_K_BACKSPACE    0x200009 // keyboard input to delete selection or character left of cursor
+#define XSTB_TEXTEDIT_K_UNDO         0x20000A // keyboard input to perform undo
+#define XSTB_TEXTEDIT_K_REDO         0x20000B // keyboard input to perform redo
+#define XSTB_TEXTEDIT_K_WORDLEFT     0x20000C // keyboard input to move cursor left one word
+#define XSTB_TEXTEDIT_K_WORDRIGHT    0x20000D // keyboard input to move cursor right one word
+#define XSTB_TEXTEDIT_K_PGUP         0x20000E // keyboard input to move cursor up a page
+#define XSTB_TEXTEDIT_K_PGDOWN       0x20000F // keyboard input to move cursor down a page
+#define XSTB_TEXTEDIT_K_SHIFT        0x400000
+
+#undef STB_TEXTEDIT_CHARTYPE
+#define STB_TEXTEDIT_CHARTYPE           uint16_t
+#define STB_TEXTEDIT_UNDOSTATECOUNT     99
+#define STB_TEXTEDIT_UNDOCHARCOUNT      999
+
+#define STB_TEXTEDIT_IMPLEMENTATION
+#define STB_TEXTEDIT_memmove memmove
+//#include "imstb_textedit.h"
+
+enum
+{
+	XEDIT_STATUS_CARET	= 0x0001
+};
+class XEditBox
+{
+public:
+	U16 m_status;
+	U32	m_backgroundColor;
+	U16 m_text[DUI_MAX_EDITSTRING] = { 0 };
+};
 
 enum
 {
@@ -121,14 +174,6 @@ enum
 	DEFAULT_SCROLLTHUMB_COLOR   = 0xFFB9B4B2
 };
 
-#define DUI_MAX_INPUTSTRING		(1<<16)		// maximu input string
-
-class XEditBox
-{
-public:
-	U32	m_backgroundColor;
-	U16 m_text[DUI_MAX_INPUTSTRING] = { 0 };
-};
 
 template <class T>
 class DUI_NO_VTABLE XWindowT

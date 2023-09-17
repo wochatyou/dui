@@ -115,7 +115,7 @@ public:
 
 		InitButtons();
 
-		blResult = m_font.createFromFace(g_fontFace, 17.0f);
+		blResult = m_font.createFromFace(g_fontFace, 15.0f);
 		if (BL_SUCCESS != blResult)
 			return (-1);
 
@@ -141,7 +141,7 @@ public:
 				BLContext ctx(img);
 
 				ctx.fillAll(bkcolor);
-				ctx.fillBox(0, 14, 60, 35, selcolor);
+				//ctx.fillBox(0, 14, 60, 35, selcolor);
 				gb.setUtf16Text((const uint16_t*)m_text);
 				m_font.shape(gb);
 				ctx.fillGlyphRun(BLPoint(4, 30), m_font, gb.glyphRun(), color);
