@@ -126,6 +126,7 @@ typedef struct XButton
 #define XSTB_TEXTEDIT_K_PGDOWN       0x20000F // keyboard input to move cursor down a page
 #define XSTB_TEXTEDIT_K_SHIFT        0x400000
 
+#if 0
 #undef STB_TEXTEDIT_CHARTYPE
 #define STB_TEXTEDIT_CHARTYPE           uint16_t
 #define STB_TEXTEDIT_UNDOSTATECOUNT     99
@@ -134,7 +135,7 @@ typedef struct XButton
 #define STB_TEXTEDIT_IMPLEMENTATION
 #define STB_TEXTEDIT_memmove memmove
 //#include "imstb_textedit.h"
-
+#endif
 enum
 {
 	XEDIT_STATUS_CARET	= 0x0001
@@ -164,7 +165,9 @@ enum
 	DUI_PROP_MOVEWIN	  = 0x01,   // Move the whole window while LButton is pressed
 	DUI_PROP_BTNACTIVE	  = 0x02,   // no active button on this virutal window
 	DUI_PROP_HASVSCROLL   = 0x04,    // have vertical scroll bar
-	DUI_PROP_HASHSCROLL   = 0x08   
+	DUI_PROP_HASHSCROLL   = 0x08,
+	DUI_PROP_HANDLEVWHEEL = 0x10,   // does this window need to handle mouse wheel?
+	DUI_PROP_HANDLEHWHEEL = 0x20
 };
 
 enum
@@ -178,6 +181,7 @@ enum
 template <class T>
 class DUI_NO_VTABLE XWindowT
 {
+	enum class XDragMode { DragNone, DragVertical, DragHorizonal };
 public:
 	void*	m_hWnd = nullptr;
 	U32*    m_screen = nullptr;
@@ -192,11 +196,14 @@ public:
 	int     m_scrollWidth = 8; // in pixel
 
 	XPOINT m_ptOffset = { 0 };
+	XPOINT m_ptOffsetNew = { 0 };
 	XSIZE  m_sizeAll = { 0 };
 	XSIZE  m_sizeLine = { 0 };
 	XSIZE  m_sizePage = { 0 };
+	int    m_cxyDragOffset = 0;
+	XPOINT m_ptMouse = { 0 };
 
-	bool   m_InDragMode = false;
+	XDragMode  m_DragMode = XDragMode::DragNone;
 
 #ifdef _WIN32
 	HCURSOR  m_cursorHand = nullptr;
@@ -339,7 +346,6 @@ public:
 		return m_screen;
 	}
 
-#if 0
 	void* SetWindowCapture()
 	{
 		void* winhandle = nullptr;
@@ -363,7 +369,14 @@ public:
 #endif
 		return winhandle;
 	}
+
+	void ReleaseWindowCapture()
+	{
+#if defined(_WIN32)
+		::ReleaseCapture();
 #endif
+	}
+
 
 	bool PostWindowMessage(U32 message, U64 wParam = 0, U64 lParam = 0)
 	{
@@ -544,99 +557,156 @@ public:
 		return 0;
 	}
 
+	int DoMouseWheel(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+	int OnMouseWheel(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		if (DUI_PROP_HANDLEVWHEEL & m_property)
+		{
+			int r0 = DUI_STATUS_NODRAW;
+			int r1 = DUI_STATUS_NODRAW;
+			int xPos = GET_X_LPARAM(lParam);
+			int yPos = GET_Y_LPARAM(lParam);
+
+			if (XWinPointInRect(xPos, yPos, &m_area))
+			{
+				int h = m_area.bottom - m_area.top;
+				int delta = GET_WHEEL_DELTA_WPARAM(wParam);
+
+				if (m_sizeAll.cy > h)
+				{
+					r0 = DUI_STATUS_NEEDRAW;
+					assert(m_sizeLine.cy > 0);
+					if (delta < 0)
+						m_ptOffset.y += m_sizeLine.cy;
+					else
+						m_ptOffset.y -= m_sizeLine.cy;
+
+					if (m_ptOffset.y < 0)
+						m_ptOffset.y = 0;
+					if (m_ptOffset.y > (m_sizeAll.cy - h))
+						m_ptOffset.y = m_sizeAll.cy - h;
+				}
+
+				{  // let the derived class to do its stuff
+					T* pT = static_cast<T*>(this);
+					r1 = pT->DoMouseWheel(uMsg, wParam, lParam, lpData);
+				}
+			}
+			if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1)
+			{
+				m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
+				return DUI_STATUS_NEEDRAW;
+			}
+		}
+
+		return DUI_STATUS_NODRAW;
+
+	}
+
 	int DoMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
 	int OnMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
+		XButton* button;
 		int r0  = DUI_STATUS_NODRAW;
 		int r1  = DUI_STATUS_NODRAW;
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
-
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 
-		XButton* button;
-		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
+		m_ptMouse.x = xPos; m_ptMouse.y = yPos;
+
+		if (GetWindowCapture() != m_hWnd) // we are not in drage mode
 		{
-			button = &m_button[i];
-			button->state = XBUTTON_STATE_NORMAL;
-		}
-
-		if (m_buttonActiveIdx >= m_buttonStartIdx)
-		{
-			assert(0 == m_buttonStartIdx);
-			assert(m_buttonActiveIdx <= m_buttonEndIdx);
-			button = &m_button[m_buttonActiveIdx];
-			button->state = XBUTTON_STATE_ACTIVE;
-		}
-
-		if (XWinPointInRect(xPos, yPos, &m_area))
-		{
-			int hit = -1;  // no hit so far
-			// handle the vertical bar
-			if (DUI_PROP_HASVSCROLL & m_property)
-			{
-				U8 status = m_status;
-				m_status &= (~DUI_STATUS_VSCROLL);
-
-				if (xPos >= (m_area.right - m_scrollWidth))
-				{
-					if (m_sizeAll.cy > h)
-					{
-						int thumb_start = (m_ptOffset.y * h) / m_sizeAll.cy;
-						int thumb_height = (h * h) / m_sizeAll.cy;
-						m_status |= DUI_STATUS_VSCROLL;
-						if (m_InDragMode)
-						{
-							int y = yPos -= m_area.top;
-							int offset = y - thumb_start;
-						}
-					}
-				}
-				if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
-					r0 = DUI_STATUS_NEEDRAW;
-			}
-
-			// transfer the coordination from real window to local virutal window
-			xPos -= m_area.left;
-			yPos -= m_area.top;
-			assert(xPos >= 0);
-			assert(yPos >= 0);
-
 			for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
 			{
 				button = &m_button[i];
-				if (XWinPointInRect(xPos, yPos, button)) // the mouse is over this button
-				{
-					hit = i;
-					break;
-				}
+				button->state = XBUTTON_STATE_NORMAL;
 			}
 
-			if (-1 != hit) // we are hovering on some button
+			if (m_buttonActiveIdx >= m_buttonStartIdx)
 			{
 				assert(0 == m_buttonStartIdx);
-				assert(m_buttonEndIdx >= m_buttonStartIdx);
+				assert(m_buttonActiveIdx <= m_buttonEndIdx);
+				button = &m_button[m_buttonActiveIdx];
+				button->state = XBUTTON_STATE_ACTIVE;
+			}
+		}
 
-				button = &m_button[hit];
-				if (0 == (XBUTTON_PROP_STATIC & button->property)) // it is not a static button
+		if (XDragMode::DragVertical == m_DragMode)
+		{
+			m_status |= DUI_STATUS_VSCROLL;
+
+			assert(m_ptOffsetNew.y >= 0);
+			assert(m_ptOffsetNew.y <= m_sizeAll.cy - h);
+
+			m_ptOffset.y = m_ptOffsetNew.y + ((yPos - m_cxyDragOffset) * m_sizeAll.cy) / h;
+
+			if (m_ptOffset.y < 0)
+				m_ptOffset.y = 0;
+			if (m_ptOffset.y > (m_sizeAll.cy - h))
+				m_ptOffset.y = m_sizeAll.cy - h;
+		}
+		else 
+		{
+			if (XWinPointInRect(xPos, yPos, &m_area)) // the mosue is in this area
+			{
+				int hit = -1;  // no hit so far
+				if (DUI_PROP_HASVSCROLL & m_property) // handle the vertical bar
 				{
-					SetCursor(m_cursorHand);
-					button->state = XBUTTON_STATE_HOVERED;
+					U8 status = m_status;  // save previous state
+					m_status &= (~DUI_STATUS_VSCROLL);
+					assert(m_area.right > m_scrollWidth);
+					if (xPos >= (m_area.right - m_scrollWidth))
+					{
+						if (m_sizeAll.cy > h) // the virutal window size is bigger than the real window size
+							m_status |= DUI_STATUS_VSCROLL;
+					}
+					if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
+						r0 = DUI_STATUS_NEEDRAW;
+				}
+				if (GetWindowCapture() != m_hWnd)
+				{
+					// transfer the coordination from real window to local virutal window
+					xPos -= m_area.left;
+					yPos -= m_area.top;
+					assert(xPos >= 0);
+					assert(yPos >= 0);
+
+					for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
+					{
+						button = &m_button[i];
+						if (XWinPointInRect(xPos, yPos, button)) // the mouse is over this button
+						{
+							hit = i;
+							break;
+						}
+					}
+					if (-1 != hit) // we are hovering on some button
+					{
+						assert(0 == m_buttonStartIdx);
+						assert(m_buttonEndIdx >= m_buttonStartIdx);
+
+						button = &m_button[hit];
+						if (0 == (XBUTTON_PROP_STATIC & button->property)) // it is not a static button
+						{
+							SetCursor(m_cursorHand);
+							button->state = XBUTTON_STATE_HOVERED;
+							r0 = DUI_STATUS_NEEDRAW;
+						}
+					}
+				}
+			}
+			else // the mouse is not in our area
+			{
+				// handle the vertical bar
+				if (DUI_STATUS_VSCROLL & m_status)
+				{
+					m_status &= (~DUI_STATUS_VSCROLL); // we should not dispaly the vertical bar
 					r0 = DUI_STATUS_NEEDRAW;
 				}
 			}
 		}
-		else
-		{
-			// handle the vertical bar
-			if (DUI_STATUS_VSCROLL & m_status)
-			{
-				m_status &= (~DUI_STATUS_VSCROLL);
-				r0 = DUI_STATUS_NEEDRAW;
-			}
-		}
-
 		// if the state is not equal to the previous state, we need to redraw it
 		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
 		{
@@ -648,12 +718,12 @@ public:
 			}
 		}
 
-		{
+		{  // let the derived class to do its stuff
 			T* pT = static_cast<T*>(this);
 			r1 = pT->DoMouseMove(uMsg, wParam, lParam, lpData);
 		}
 
-		if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1)
+		if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1 || XDragMode::DragNone != m_DragMode)
 		{
 			m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 			return DUI_STATUS_NEEDRAW;
@@ -670,9 +740,9 @@ public:
 		XButton* button;
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
+		m_ptMouse.x = xPos; m_ptMouse.y = yPos;
 
-		m_InDragMode = false;
-
+		m_DragMode = XDragMode::DragNone;
 		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
 		{
 			button = &m_button[i];
@@ -699,7 +769,6 @@ public:
 			// handle the vertical bar
 			if (DUI_PROP_HASVSCROLL & m_property)
 			{
-				int thumb_start, thumb_height;
 				U8 status = m_status;
 				m_status &= (~DUI_STATUS_VSCROLL);
 
@@ -707,30 +776,32 @@ public:
 				{
 					if (m_sizeAll.cy > h)
 					{
-						m_status |= DUI_STATUS_VSCROLL;
-						thumb_start = (m_ptOffset.y * h) / m_sizeAll.cy;
-						thumb_height = (h * h) / m_sizeAll.cy;
-						if (yPos < (m_area.top + thumb_start))
-						{
-							assert(m_sizeLine.cy > 0);
-							m_ptOffset.y -= m_sizeLine.cy;
-							r0 = DUI_STATUS_NEEDRAW;
-						} 
-						else if (yPos > (m_area.top + thumb_start + thumb_height))
-						{
-							assert(m_sizeLine.cy > 0);
-							m_ptOffset.y += m_sizeLine.cy;
-							r0 = DUI_STATUS_NEEDRAW;
-						}
-						else // we hit the thumb
-						{
-							m_InDragMode = true;
-						}
+						int thumb_start = (m_ptOffset.y * h) / m_sizeAll.cy;
+						int thumb_height = (h * h) / m_sizeAll.cy;
 
-						if (m_ptOffset.y < 0)
-							m_ptOffset.y = 0;
-						if (m_ptOffset.y > (m_sizeAll.cy - h))
-							m_ptOffset.y = m_sizeAll.cy - h;
+						m_status |= DUI_STATUS_VSCROLL;
+
+						assert(m_ptOffset.y >= 0);
+						assert(m_ptOffset.y <= m_sizeAll.cy - h);
+
+						if (yPos > (m_area.top + thumb_start) && yPos < (m_area.top + thumb_start + thumb_height))
+						{
+							// we hit the thumb
+							m_cxyDragOffset = yPos;
+							m_ptOffsetNew.y = m_ptOffset.y;
+							m_DragMode = XDragMode::DragVertical;
+							SetWindowCapture();
+						} 
+						else
+						{
+							int thumb_start_new = (yPos - m_area.top) - (thumb_height >> 1);
+							if (thumb_start_new < 0)
+								thumb_start_new = 0;
+							if (thumb_start_new > h - thumb_height)
+								thumb_start_new = h - thumb_height;
+
+							m_ptOffset.y = (thumb_start_new * m_sizeAll.cy)/h;
+						}
 
 						m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 						return DUI_STATUS_NEEDRAW;
@@ -739,6 +810,10 @@ public:
 				}
 				if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
 					r0 = DUI_STATUS_NEEDRAW;
+			}
+			else if (DUI_PROP_HASHSCROLL & m_property) // handle the horizonal bar
+			{
+				// TODO
 			}
 
 			// transfer the coordination from real window to local virutal window
@@ -810,8 +885,15 @@ public:
 		XButton* button;
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
+		m_ptMouse.x = xPos; m_ptMouse.y = yPos;
 
-		m_InDragMode = false;
+		if (GetWindowCapture() == m_hWnd)
+		{
+			ReleaseWindowCapture();
+		}
+
+		m_DragMode = XDragMode::DragNone;
+		m_ptOffsetNew.x = -1, m_ptOffsetNew.y = -1;
 
 		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
 		{

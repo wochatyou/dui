@@ -148,6 +148,7 @@ public:
 		MESSAGE_HANDLER(WM_PAINT, OnPaint)
 		MESSAGE_HANDLER(WM_TIMER, OnTimer)
 		MESSAGE_HANDLER(WM_MOUSEMOVE, OnMouseMove)
+		MESSAGE_HANDLER(WM_MOUSEWHEEL, OnMouseWheel)
 		MESSAGE_HANDLER(WM_LBUTTONDOWN, OnLButtonDown)
 		MESSAGE_HANDLER(WM_LBUTTONUP, OnLButtonUp)
 		MESSAGE_HANDLER(WM_LBUTTONDBLCLK, OnLButtonDoubleClick)
@@ -474,6 +475,22 @@ public:
 		m_win5.SetPosition(r, dst, size);
 	}
 
+	
+	LRESULT OnMouseWheel(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		int needReDraw0 = m_win0.OnMouseWheel(uMsg, wParam, lParam);
+		int needReDraw1 = m_win1.OnMouseWheel(uMsg, wParam, lParam);
+		int needReDraw2 = m_win2.OnMouseWheel(uMsg, wParam, lParam);
+		int needReDraw3 = m_win3.OnMouseWheel(uMsg, wParam, lParam);
+		int needReDraw4 = m_win4.OnMouseWheel(uMsg, wParam, lParam);
+		int needReDraw5 = m_win5.OnMouseWheel(uMsg, wParam, lParam);
+
+		if (needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
+			Invalidate();
+
+		return 0;
+	}
+
 	LRESULT OnMouseMove(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
 		int needReDrawX = 0;
@@ -490,8 +507,6 @@ public:
 		if(::GetCapture() == m_hWnd)
 		{
 			int	newSplitPos;
-
-			ATLASSERT(DrapMode::dragModeNone != m_dragMode);
 
 			switch (m_dragMode)
 			{
@@ -511,25 +526,23 @@ public:
 				}
 				break;
 			case DrapMode::dragModeH:
-			{
-				newSplitPos = yPos - m_cyDragOffset;
-				if (newSplitPos == -1)   // avoid -1, that means default position
-					newSplitPos = -2;
-				if (m_splitterHPos != newSplitPos)
 				{
-					if (newSplitPos >= m_splitterHPosToTop && newSplitPos < (m_rectClient.bottom - m_rectClient.top - m_splitterHPosToBottom))
+					newSplitPos = yPos - m_cyDragOffset;
+					if (newSplitPos == -1)   // avoid -1, that means default position
+						newSplitPos = -2;
+					if (m_splitterHPos != newSplitPos)
 					{
-						if (SetSplitterPos(newSplitPos, false))
-							needReDrawX = 1;
+						if (newSplitPos >= m_splitterHPosToTop && newSplitPos < (m_rectClient.bottom - m_rectClient.top - m_splitterHPosToBottom))
+						{
+							if (SetSplitterPos(newSplitPos, false))
+								needReDrawX = 1;
+						}
 					}
 				}
-			}
-			break;
+				break;
 			default:
-				ATLASSERT(FALSE);
 				break;
 			}
-
 			if (needReDrawX)
 				AdjustDUIWindowPosition();
 		}
@@ -631,7 +644,6 @@ public:
 
 		if(::GetCapture() == m_hWnd)
 		{
-			ATLASSERT(DrapMode::dragModeNone != m_dragMode);
 			switch (m_dragMode)
 			{
 			case DrapMode::dragModeV:
@@ -641,7 +653,6 @@ public:
 				m_splitterHPosNew = m_splitterHPos;
 				break;
 			default:
-				ATLASSERT(FALSE);
 				break;
 			}
 			::ReleaseCapture();
