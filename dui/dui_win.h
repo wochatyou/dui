@@ -196,7 +196,7 @@ public:
 	int     m_scrollWidth = 8; // in pixel
 
 	XPOINT m_ptOffset = { 0 };
-	XPOINT m_ptOffsetNew = { 0 };
+	XPOINT m_ptOffsetOld = { 0 };
 	XSIZE  m_sizeAll = { 0 };
 	XSIZE  m_sizeLine = { 0 };
 	XSIZE  m_sizePage = { 0 };
@@ -637,10 +637,10 @@ public:
 		{
 			m_status |= DUI_STATUS_VSCROLL;
 
-			assert(m_ptOffsetNew.y >= 0);
-			assert(m_ptOffsetNew.y <= m_sizeAll.cy - h);
+			assert(m_ptOffsetOld.y >= 0);
+			assert(m_ptOffsetOld.y <= m_sizeAll.cy - h);
 
-			m_ptOffset.y = m_ptOffsetNew.y + ((yPos - m_cxyDragOffset) * m_sizeAll.cy) / h;
+			m_ptOffset.y = m_ptOffsetOld.y + ((yPos - m_cxyDragOffset) * m_sizeAll.cy) / h;
 
 			if (m_ptOffset.y < 0)
 				m_ptOffset.y = 0;
@@ -788,7 +788,7 @@ public:
 						{
 							// we hit the thumb
 							m_cxyDragOffset = yPos;
-							m_ptOffsetNew.y = m_ptOffset.y;
+							m_ptOffsetOld.y = m_ptOffset.y;
 							m_DragMode = XDragMode::DragVertical;
 							SetWindowCapture();
 						} 
@@ -893,7 +893,7 @@ public:
 		}
 
 		m_DragMode = XDragMode::DragNone;
-		m_ptOffsetNew.x = -1, m_ptOffsetNew.y = -1;
+		m_ptOffsetOld.x = -1, m_ptOffsetOld.y = -1;
 
 		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
 		{

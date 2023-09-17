@@ -427,6 +427,10 @@ public:
 		return ret;
 	}
 
+	int DoMouseWheel(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) 
+	{ 
+		return DoMouseMove(uMsg, wParam, lParam, lpData);
+	}
 };
 
 #endif  /* __WOCHAT_WINDOWS2_H__ */
