@@ -478,6 +478,14 @@ public:
 	
 	LRESULT OnMouseWheel(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		POINT pt;
+		pt.x = GET_X_LPARAM(lParam);
+		pt.y = GET_Y_LPARAM(lParam);
+
+		// convert screen coordinates to window coordinate
+		ScreenToClient(&pt);
+		lParam = MAKELONG(pt.x, pt.y);
+
 		int needReDraw0 = m_win0.OnMouseWheel(uMsg, wParam, lParam);
 		int needReDraw1 = m_win1.OnMouseWheel(uMsg, wParam, lParam);
 		int needReDraw2 = m_win2.OnMouseWheel(uMsg, wParam, lParam);
