@@ -103,10 +103,9 @@ typedef struct XButton
 } XButton;
 
 // determin if one object is hitted
-#define XWinPointInRect(x, y, OBJ)		(((x) >= ((OBJ)->left)) && ((x) < ((OBJ)->right)) && ((y) >= ((OBJ)->top)) && ((y)<((OBJ)->bottom)))
+#define XWinPointInRect(x, y, OBJ)		(((x) >= ((OBJ)->left)) && ((x) < ((OBJ)->right)) && ((y) >= ((OBJ)->top)) && ((y) < ((OBJ)->bottom)))
 
 #define DUI_MAX_EDITSTRING		(1<<10)		// maximu input string
-
 
 // We don't use an enum so we can build even with conflicting symbols (if another user of stb_textedit.h leak their STB_TEXTEDIT_K_* symbols)
 #define XSTB_TEXTEDIT_K_LEFT         0x200000 // keyboard input to move cursor left
@@ -137,10 +136,12 @@ typedef struct XButton
 #define STB_TEXTEDIT_memmove memmove
 //#include "imstb_textedit.h"
 #endif
+
 enum
 {
 	XEDIT_STATUS_CARET	= 0x0001
 };
+
 class XEditBox
 {
 public:
@@ -182,13 +183,15 @@ enum
 template <class T>
 class DUI_NO_VTABLE XWindowT
 {
+private:	
 	enum class XDragMode { DragNone, DragVertical, DragHorizonal };
+
 public:
 	void*	m_hWnd = nullptr;
 	U32*    m_screen = nullptr;
 	U32		m_size = 0;
 	U8      m_Id[8] = { 0 }; // for debugging 
-	XRECT   m_area = { 0 };
+	XRECT   m_area = { 0 };  // the area of this window in the client area of parent window
 
 	MemoryContext m_pool = nullptr;
 
