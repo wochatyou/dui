@@ -2,6 +2,7 @@
 #define __DUI_WIN_H__
 
 #include <stdint.h>
+#include "dui_mempool.h"
 
 #define S8      int8_t
 #define S16     int16_t
@@ -189,6 +190,8 @@ public:
 	U8      m_Id[8] = { 0 }; // for debugging 
 	XRECT   m_area = { 0 };
 
+	MemoryContext m_pool = nullptr;
+
 	int     m_buttonStartIdx = 0;
 	int     m_buttonEndIdx = -1;
 	int     m_buttonActiveIdx = -1;
@@ -260,6 +263,7 @@ public:
 
 	~XWindowT() 
 	{
+		mempool_destroy(m_pool);
 	}
 
 	bool IsRealWindow(void* hwnd)

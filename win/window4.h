@@ -47,7 +47,7 @@ public:
 	{
 		m_backgroundColor = 0xFFF5F5F5;
 		m_message = WM_WIN4_MESSAGE;
-		m_property |= DUI_PROP_HASVSCROLL;
+		m_property |= (DUI_PROP_HASVSCROLL | DUI_PROP_HANDLEVWHEEL);
 	}
 
 	~XWindow4()
@@ -85,6 +85,11 @@ public:
 		BLFontMetrics fm = m_font0.metrics();
 		m_lineHeight0 = (int)(fm.ascent + fm.descent + fm.lineGap);
 		assert(m_lineHeight0 > 0);
+
+		m_pool = mempool_create(0, 0, 0);
+
+		if (nullptr == m_pool)
+			return (-2);
 
 		return 0;
 	}
@@ -137,7 +142,7 @@ public:
 						if (charLen >= charRemaining)
 							break;
 					}
-					halfSize = (halfSize >> 1);
+					halfSize >>= 1;
 				}
 
 				if (charRemaining > charLen)
