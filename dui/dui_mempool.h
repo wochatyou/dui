@@ -8,8 +8,6 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-typedef size_t Size;
-
 #define MemoryContext		DUIMemoryContext
 #define MemoryContextData	DUIMemoryContextData
 #define	mempool_create		DUI_mempool_create
@@ -28,11 +26,13 @@ void mempool_destroy(MemoryContext cxt);
 
 void mempool_reset(MemoryContext cxt);
 
-Size mempool_size(MemoryContext cxt);
+#ifdef _DEBUG
+size_t mempool_size(MemoryContext cxt);
+#endif
 
-void* palloc(MemoryContext cxt, Size size);
+void* palloc(MemoryContext cxt, size_t size);
 
-void* palloc0(MemoryContext cxt, Size size);
+void* palloc0(MemoryContext cxt, size_t size);
 
 void pfree(void* pointer);
 

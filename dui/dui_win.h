@@ -71,7 +71,8 @@ typedef struct XBitmap
 
 enum XButtonProperty
 {
-    XBUTTON_PROP_ROUND = 0x01,
+    XBUTTON_PROP_NONE   = 0x00,
+    XBUTTON_PROP_ROUND  = 0x01,
     XBUTTON_PROP_STATIC = 0x02
 };
 
@@ -169,7 +170,8 @@ enum
     DUI_PROP_HASVSCROLL   = 0x04,    // have vertical scroll bar
     DUI_PROP_HASHSCROLL   = 0x08,
     DUI_PROP_HANDLEVWHEEL = 0x10,   // does this window need to handle mouse wheel?
-    DUI_PROP_HANDLEHWHEEL = 0x20
+    DUI_PROP_HANDLEHWHEEL = 0x20,
+    DUI_PROP_HANDLETIMER  = 0x40
 };
 
 enum
@@ -224,12 +226,12 @@ public:
     U32  m_thumbColor = DEFAULT_SCROLLTHUMB_COLOR;
 
     enum {
-        MAX_BUTTONS = 16,
-        MAX_BUTTON_BITMAPS = (MAX_BUTTONS << 2)
+        MAX_XBUTTONS = 16,
+        MAX_XBUTTOn_BITMAPS = (MAX_XBUTTONS << 2)
     };
 
-    XButton  m_button[MAX_BUTTONS];
-    XBitmap  m_bitmap[MAX_BUTTON_BITMAPS];
+    XButton  m_button[MAX_XBUTTONS];
+    XBitmap  m_bitmap[MAX_XBUTTOn_BITMAPS];
 
 public:
     XWindowT()
@@ -237,17 +239,21 @@ public:
         U8 id;
         XButton* button;
         XBitmap* bmp;
+#ifdef _WIN32        
         m_cursorHand = ::LoadCursor(nullptr, IDC_HAND);
+#else
+        #error You have to provide platform-specified load cursor function here
+#endif        
         assert(NULL != m_cursorHand);
 
-        static_assert(MAX_BUTTONS < (1 << 6));
+        static_assert(MAX_XBUTTONS < (1 << 6));
         
         // initialize the button's status
-        for (id = 0; id < MAX_BUTTONS; id++)
+        for (id = 0; id < MAX_XBUTTONS; id++)
         {
             button = &m_button[id];
             button->id = id;
-            button->property = 0;
+            button->property = XBUTTON_PROP_NONE;
             button->statePrev = button->state = XBUTTON_STATE_NORMAL;
             button->left = button->right = button->top = button->bottom = 0;
             button->imgNormal = button->imgHover = button->imgPress = button->imgActive = nullptr;
@@ -255,7 +261,7 @@ public:
         }
 
         // initialize the bitmap's status
-        for (id = 0; id < MAX_BUTTON_BITMAPS; id++)
+        for (id = 0; id < MAX_XBUTTOn_BITMAPS; id++)
         {
             bmp = &m_bitmap[id];
             bmp->id = id;
@@ -278,12 +284,14 @@ public:
         return false;
 #endif
     }
+
+    // Windows Id is used for debugging purpose
     void SetWindowId(const U8* id, U8 bytes)
     {
         if (bytes > 7)
             bytes = 7;
 
-        for(U8 i=0; i<bytes; i++)
+        for(U8 i = 0; i < bytes; i++)
             m_Id[i] = *id++;
 
         m_Id[bytes] = 0;
@@ -303,6 +311,7 @@ public:
     void WindowHide()
     {
         m_status &= (~DUI_STATUS_VISIBLE);
+
         T* pT = static_cast<T*>(this);
         pT->PostWindowHide();
     }
@@ -311,6 +320,7 @@ public:
     void WindowShow()
     {
         m_status |= DUI_STATUS_VISIBLE;
+
         T* pT = static_cast<T*>(this);
         pT->PostWindowShow();
 
@@ -327,6 +337,10 @@ public:
         int ret = DUI_STATUS_NODRAW;
         U8 state;
         XButton* button;
+
+        assert(m_buttonEndIdx < MAX_XBUTTONS);
+        assert(m_buttonStartIdx >= 0 &&  m_buttonStartIdx < MAX_XBUTTONS);
+
         for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
         {
             button = &m_button[i]; 
@@ -357,19 +371,23 @@ public:
     void* SetWindowCapture()
     {
         void* winhandle = nullptr;
+
         assert(IsRealWindow(m_hWnd));
+        
         if (IsRealWindow(m_hWnd))
         {
 #if defined(_WIN32)
             winhandle = ::SetCapture((HWND)m_hWnd);
 #endif
         }
+
         return winhandle;
     }
 
     void* GetWindowCapture()
     {
         void* winhandle = nullptr;
+        
         assert(IsRealWindow(m_hWnd));
 
 #if defined(_WIN32)
@@ -384,7 +402,6 @@ public:
         ::ReleaseCapture();
 #endif
     }
-
 
     bool PostWindowMessage(U32 message, U64 wParam = 0, U64 lParam = 0)
     {
@@ -402,18 +419,20 @@ public:
         return bRet;
     }
 
+#if 0
     void DrawButton(U32* dst, int w, int h, XButton* button)
     {
         U32* src;
         int dx = button->left;
         int dy = button->top;
 
+        assert(nullptr != dst);
+        assert(nullptr != button);
+
         if (XBUTTON_STATE_HIDDEN != button->state) // this button is visible
         {
-            assert(nullptr != dst);
-            assert(nullptr != button);
 
-            XBitmap* bitmap = nullptr;
+            XBitmap* bitmap = imgNormal;
             switch (button->state)
             {
             case XBUTTON_STATE_PRESSED:
@@ -426,14 +445,65 @@ public:
                 bitmap = button->imgActive;
                 break;
             default:
-                bitmap = button->imgNormal;
                 break;
             }
 
             assert(nullptr != bitmap);
+
             src = bitmap->data;
 
             assert(nullptr != src);
+
+            if (XBUTTON_PROP_ROUND & button->property)
+            {
+                ScreenDrawRectRound(dst, w, h, src, bitmap->w, bitmap->h, dx, dy, m_backgroundColor);
+            }
+            else
+            {
+                ScreenDrawRect(dst, w, h, src, bitmap->w, bitmap->h, dx, dy);
+            }
+        }
+    }
+#endif
+
+    void DrawButton(XButton* button)
+    {
+        U32* dst;
+        U32* src;
+        int dx = button->left;
+        int dy = button->top;
+        int w = m_area.right - m_area.left;
+        int h = m_area.bottom - m_area.top;
+
+        dst = m_screen;
+        assert(nullptr != dst);
+        assert(nullptr != button);
+
+        if (XBUTTON_STATE_HIDDEN != button->state) // this button is visible
+        {
+
+            XBitmap* bitmap = button->imgNormal;
+            switch (button->state)
+            {
+            case XBUTTON_STATE_PRESSED:
+                bitmap = button->imgPress;
+                break;
+            case XBUTTON_STATE_HOVERED:
+                bitmap = button->imgHover;
+                break;
+            case XBUTTON_STATE_ACTIVE:
+                bitmap = button->imgActive;
+                break;
+            default:
+                break;
+            }
+
+            assert(nullptr != bitmap);
+
+            src = bitmap->data;
+
+            assert(nullptr != src);
+
             if (XBUTTON_PROP_ROUND & button->property)
             {
                 ScreenDrawRectRound(dst, w, h, src, bitmap->w, bitmap->h, dx, dy, m_backgroundColor);
@@ -450,16 +520,18 @@ public:
     {
         if (nullptr != r)
         {
-            m_area.left = r->left; 
-            m_area.top = r->top; 
-            m_area.right = r->right; 
+            m_area.left   = r->left; 
+            m_area.top    = r->top; 
+            m_area.right  = r->right; 
             m_area.bottom = r->bottom;
         }
         else
         {
             m_area.left = m_area.top = m_area.right = m_area.bottom = 0;
         }
+
         m_screen = screen;
+        
         if(0 != size)
             m_size = size;
         else
@@ -502,6 +574,8 @@ public:
                 thumb_width = m_scrollWidth - 2;
                 thumb_start = (vOffset * h) / vHeight;
                 thumb_height = (h * h) / vHeight;
+                if(thumb_height < 16)
+                    thumb_height = 16; // we keep the thumb mini size to 16 pixels
 
                 // Draw the vertical scroll bar
                 ScreenFillRect(m_screen, w, h, m_scrollbarColor, m_scrollWidth, h, w - m_scrollWidth, 0);
@@ -513,14 +587,16 @@ public:
             for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
             {
                 button = &m_button[i];
-                DrawButton(m_screen, w, h, button);
+                DrawButton(button);
                 button->statePrev = button->state;
             }
 
             T* pT = static_cast<T*>(this);
             pT->Draw();
+
             screenBuf = m_screen;
         }
+
         // to avoid another needless draw
         m_status &= (~DUI_STATUS_NEEDRAW);
         
@@ -530,12 +606,12 @@ public:
     int DoSize(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
     int OnSize(U32 uMsg, U64 wParam, U64 lParam, void* lpData)
     {
-        RECT* r = (RECT*)lParam;
+        XRECT* r = (XRECT*)lParam;
         if (nullptr != r)
         {
-            m_area.left = r->left;
-            m_area.top = r->top;
-            m_area.right = r->right;
+            m_area.left   = r->left;
+            m_area.top    = r->top;
+            m_area.right  = r->right;
             m_area.bottom = r->bottom;
             m_size = (U32)((r->right - r->left) * (r->bottom - r->top));
         }
@@ -544,13 +620,16 @@ public:
             m_area.left = m_area.top = m_area.right = m_area.bottom = 0;
             m_size = 0;
         }
+
         m_screen = (U32*)lpData;
+        assert(nullptr != m_screen);
 
         if (nullptr != r)
         {
             T* pT = static_cast<T*>(this);
             pT->DoSize(uMsg, wParam, lParam, lpData);
         }
+
         m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 
         return DUI_STATUS_NEEDRAW;
@@ -559,8 +638,11 @@ public:
     int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
     int OnTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
     {
-        T* pT = static_cast<T*>(this);
-        pT->DoTimer(uMsg, wParam, lParam, lpData);
+        if(DUI_PROP_HANDLETIMER & m_status)
+        {
+            T* pT = static_cast<T*>(this);
+            pT->DoTimer(uMsg, wParam, lParam, lpData);
+        }
 
         return 0;
     }
@@ -600,6 +682,7 @@ public:
                     r1 = pT->DoMouseWheel(uMsg, wParam, lParam, lpData);
                 }
             }
+
             if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1)
             {
                 m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
@@ -645,9 +728,6 @@ public:
         {
             m_status |= DUI_STATUS_VSCROLL;
 
-            assert(m_ptOffsetOld.y >= 0);
-            assert(m_ptOffsetOld.y <= m_sizeAll.cy - h);
-
             m_ptOffset.y = m_ptOffsetOld.y + ((yPos - m_cxyDragOffset) * m_sizeAll.cy) / h;
 
             if (m_ptOffset.y < 0)
@@ -664,15 +744,19 @@ public:
                 {
                     U8 status = m_status;  // save previous state
                     m_status &= (~DUI_STATUS_VSCROLL);
+
                     assert(m_area.right > m_scrollWidth);
+                    
                     if (xPos >= (m_area.right - m_scrollWidth))
                     {
                         if (m_sizeAll.cy > h) // the virutal window size is bigger than the real window size
                             m_status |= DUI_STATUS_VSCROLL;
                     }
+
                     if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
                         r0 = DUI_STATUS_NEEDRAW;
                 }
+
                 if (GetWindowCapture() != m_hWnd)
                 {
                     // transfer the coordination from real window to local virutal window
@@ -715,6 +799,7 @@ public:
                 }
             }
         }
+
         // if the state is not equal to the previous state, we need to redraw it
         for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
         {
@@ -751,6 +836,7 @@ public:
         m_ptMouse.x = xPos; m_ptMouse.y = yPos;
 
         m_DragMode = XDragMode::DragNone;
+        
         for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
         {
             button = &m_button[i];
@@ -786,6 +872,9 @@ public:
                     {
                         int thumb_start = (m_ptOffset.y * h) / m_sizeAll.cy;
                         int thumb_height = (h * h) / m_sizeAll.cy;
+                
+                        if(thumb_height < 16)
+                            thumb_height = 16; // we keep the thumb mini size to 16 pixels
 
                         m_status |= DUI_STATUS_VSCROLL;
 

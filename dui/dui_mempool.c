@@ -410,7 +410,6 @@ typedef struct MemoryContextCounters
 	Size		freespace;		/* The unused portion of totalspace */
 } MemoryContextCounters;
 
-
 typedef enum NodeTag
 {
 	T_Invalid = 0,
@@ -820,8 +819,8 @@ typedef struct MemoryContextData
 	MemoryContext firstchild;	/* head of linked list of children */
 	MemoryContext prevchild;	/* previous child of same parent */
 	MemoryContext nextchild;	/* next child of same parent */
-	const char* name;			/* context name (just for debugging) */
-	const char* ident;			/* context ID if any (just for debugging) */
+	const char*   name;			/* context name (just for debugging) */
+	const char*   ident;			/* context ID if any (just for debugging) */
 	MemoryContextCallback* reset_cbs;	/* list of reset/delete callbacks */
 } MemoryContextData;
 
@@ -1156,7 +1155,7 @@ AllocSetFreeIndex(Size size)
  * Context routines generally assume that MemoryContextCreate can't fail,
  * so this can contain Assert but not elog/ereport.
  */
-void
+static void
 MemoryContextCreate(MemoryContext node,
 	NodeTag tag,
 	MemoryContextMethodID method_id,
@@ -1202,7 +1201,7 @@ MemoryContextCreate(MemoryContext node,
  *		Release all space allocated within a context.
  *		Nothing is done to the context's descendant contexts.
  */
-void
+static void
 MemoryContextResetOnly(MemoryContext context)
 {
 	Assert(MemoryContextIsValid(context));
@@ -1227,11 +1226,6 @@ MemoryContextResetOnly(MemoryContext context)
 	}
 }
 
-/*
- * Public routines
- */
-
-
  /*
   * AllocSetContextCreateInternal
   *		Create a new AllocSet context.
@@ -1248,7 +1242,7 @@ MemoryContextResetOnly(MemoryContext context)
   * Note: don't call this directly; go through the wrapper macro
   * AllocSetContextCreate.
   */
-MemoryContext
+static MemoryContext
 AllocSetContextCreateInternal(MemoryContext parent,
 	const char* name,
 	Size minContextSize,
@@ -2631,10 +2625,12 @@ void mempool_reset(MemoryContext cxt)
 	}
 }
 
-Size mempool_size(MemoryContext cxt)
+#ifdef _DEBUG
+size_t mempool_size(MemoryContext cxt)
 {
 	return 0;
 }
+#endif
 
 void* palloc(MemoryContext cxt, Size size)
 {
