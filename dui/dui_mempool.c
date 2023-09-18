@@ -47,6 +47,12 @@
 #include <assert.h>
 #include "dui_mempool.h"
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#define HAVE_BITSCAN_FORWARD
+#define HAVE_BITSCAN_REVERSE
+#endif
+
 #ifdef USE_VALGRIND
 #include <valgrind/memcheck.h>
 #else
@@ -61,8 +67,66 @@
 #define VALGRIND_MEMPOOL_CHANGE(context, optr, nptr, size)	//do {} while (0)
 #endif
 
+ /* Limits of integral types. */
+#ifndef INT8_MIN
+#define INT8_MIN               (-128)
+#endif
+#ifndef INT16_MIN
+#define INT16_MIN              (-32767-1)
+#endif
+#ifndef INT32_MIN
+#define INT32_MIN              (-2147483647-1)
+#endif
+#ifndef INT8_MAX
+#define INT8_MAX               (127)
+#endif
+#ifndef INT16_MAX
+#define INT16_MAX              (32767)
+#endif
+#ifndef INT32_MAX
+#define INT32_MAX              (2147483647)
+#endif
+#ifndef UINT8_MAX
+#define UINT8_MAX              (255U)
+#endif
+#ifndef UINT16_MAX
+#define UINT16_MAX             (65535U)
+#endif
+#ifndef UINT32_MAX
+#define UINT32_MAX             (4294967295U)
+#endif
+
+#ifndef SIZE_MAX
+#define SIZE_MAX               (~(size_t)0)
+#endif
+
+ /*
+  * Macros to support compile-time assertion checks.
+  *
+  * If the "condition" (a compile-time-constant expression) evaluates to false,
+  * throw a compile error using the "errmessage" (a string literal).
+  *
+  * C11 has _Static_assert(), and most C99 compilers already support that.  For
+  * portability, we wrap it into StaticAssertDecl().  _Static_assert() is a
+  * "declaration", and so it must be placed where for example a variable
+  * declaration would be valid.  As long as we compile with
+  * -Wno-declaration-after-statement, that also means it cannot be placed after
+  * statements in a function.  Macros StaticAssertStmt() and StaticAssertExpr()
+  * make it safe to use as a statement or in an expression, respectively.
+  *
+  * For compilers without _Static_assert(), we fall back on a kluge that
+  * assumes the compiler will complain about a negative width for a struct
+  * bit-field.  This will not include a helpful error message, but it beats not
+  * getting an error at all.
+  */
+
 #define StaticAssertStmt(condition, errmessage) \
 	static_assert(condition, errmessage)
+
+#define StaticAssertDecl(condition, errmessage) \
+	static_assert(condition, errmessage)
+
+#define Assert(p) assert(p)
 
  /* only GCC supports the unused attribute */
 #ifdef __GNUC__
@@ -72,13 +136,13 @@
 #endif
 
 /*
- * Max
+ * PGMax
  *		Return the maximum of two numbers.
  */
 #define PGMax(x, y)		((x) > (y) ? (x) : (y))
 
  /*
-  * Min
+  * PGMin
   *		Return the minimum of two numbers.
   */
 #define PGMin(x, y)		((x) < (y) ? (x) : (y))
@@ -108,6 +172,9 @@
 #else
 #define PG_USED_FOR_ASSERTS_ONLY pg_attribute_unused()
 #endif
+
+#define INT64CONST(x)  (x##LL)
+#define UINT64CONST(x) (x##ULL)
 
  /* ----------------
   * Alignment macros: align a length or address appropriately for a given type.
@@ -154,14 +221,6 @@ typedef size_t Size;
  */
 #define PointerIsValid(pointer) ((const void*)(pointer) != NULL)
 
-#define StaticAssertDecl(condition, errmessage) 
-
-#define Assert(condition)
-//#define Assert(condition)	((void)true)
-
-#define INT64CONST(x)  (x##LL)
-#define UINT64CONST(x) (x##ULL)
-
 /* Get a bit mask of the bits set in non-long aligned addresses */
 #define LONG_ALIGN_MASK (sizeof(long) - 1)
 #define MEMSET_LOOP_LIMIT 1024
@@ -196,6 +255,17 @@ typedef size_t Size;
  * block that is storing the chunk.  Must be 1 less than a power of 2.
  */
 #define MEMORYCHUNK_MAX_BLOCKOFFSET		UINT64CONST(0x3FFFFFFF)
+
+ /* Must be less than SIZE_MAX */
+#define MaxAllocHugeSize	(SIZE_MAX / 2)
+
+#define InvalidAllocSize	SIZE_MAX
+
+#define AllocHugeSizeIsValid(size)	((Size) (size) <= MaxAllocHugeSize)
+
+#define MaxAllocSize	((Size) 0x3fffffff) /* 1 gigabyte - 1 */
+
+#define AllocSizeIsValid(size)	((Size) (size) <= MaxAllocSize)
 
  /*--------------------
   * Chunk freelist k holds chunks of size 1 << (k + ALLOC_MINBITS),
@@ -248,7 +318,14 @@ typedef size_t Size;
  */
 typedef enum MemoryContextMethodID
 {
-	MCTX_ASET_ID = 0
+	MCTX_UNUSED1_ID,			/* 000 occurs in never-used memory */
+	MCTX_UNUSED2_ID,			/* glibc malloc'd chunks usually match 001 */
+	MCTX_UNUSED3_ID,			/* glibc malloc'd chunks > 128kB match 010 */
+	MCTX_ASET_ID,
+	MCTX_GENERATION_ID,
+	MCTX_SLAB_ID,
+	MCTX_ALIGNED_REDIRECT_ID,
+	MCTX_UNUSED4_ID				/* 111 occurs in wipe_mem'd memory */
 } MemoryContextMethodID;
 
 typedef struct MemoryChunk
@@ -333,6 +410,26 @@ typedef struct MemoryContextCounters
 	Size		freespace;		/* The unused portion of totalspace */
 } MemoryContextCounters;
 
+
+typedef enum NodeTag
+{
+	T_Invalid = 0,
+	T_AllocSetContext = 450
+} NodeTag;
+
+/*
+ * The first field of a node of any type is guaranteed to be the NodeTag.
+ * Hence the type of any node can be gotten by casting it to Node. Declaring
+ * a variable to be of Node * (instead of void *) can also facilitate
+ * debugging.
+ */
+typedef struct Node
+{
+	NodeTag		type;
+} Node;
+
+#define nodeTag(nodeptr)		(((const Node*)(nodeptr))->type)
+
 #define IsA(nodeptr,_type_)		(nodeTag(nodeptr) == T_##_type_)
 
 /*
@@ -407,6 +504,11 @@ typedef void (*MemoryStatsPrintFunc) (MemoryContext context, void* passthru,
 #define HdrMaskGetValue(hdrmask) \
 	(((hdrmask) >> MEMORYCHUNK_VALUE_BASEBIT) & MEMORYCHUNK_MAX_VALUE)
 
+/* For external chunks only, check the magic number matches */
+#define HdrMaskCheckMagic(hdrmask) \
+	(MEMORYCHUNK_MAGIC == \
+	 ((hdrmask) >> MEMORYCHUNK_VALUE_BASEBIT << MEMORYCHUNK_VALUE_BASEBIT))
+
 typedef struct MemoryContextMethods
 {
 	void* (*alloc) (MemoryContext context, Size size);
@@ -444,11 +546,58 @@ static void AllocSetStats(MemoryContext context,
 static void AllocSetCheck(MemoryContext context);
 #endif
 
+/*
+ * Support routines to trap use of invalid memory context method IDs
+ * (from calling pfree or the like on a bogus pointer).  As a possible
+ * aid in debugging, we report the header word along with the pointer
+ * address (if we got here, there must be an accessible header word).
+ */
+static void
+BogusFree(void* pointer)
+{
+#if 0
+	elog(ERROR, "pfree called with invalid pointer %p (header 0x%016llx)",
+		pointer, (unsigned long long) GetMemoryChunkHeader(pointer));
+#endif
+}
+
+static void*
+BogusRealloc(void* pointer, Size size)
+{
+#if 0
+	elog(ERROR, "repalloc called with invalid pointer %p (header 0x%016llx)",
+		pointer, (unsigned long long) GetMemoryChunkHeader(pointer));
+#endif
+	return NULL;				/* keep compiler quiet */
+}
+
+static MemoryContext
+BogusGetChunkContext(void* pointer)
+{
+#if 0
+	elog(ERROR, "GetMemoryChunkContext called with invalid pointer %p (header 0x%016llx)",
+		pointer, (unsigned long long) GetMemoryChunkHeader(pointer));
+#endif
+	return NULL;				/* keep compiler quiet */
+}
+
+static Size
+BogusGetChunkSpace(void* pointer)
+{
+#if 0
+	elog(ERROR, "GetMemoryChunkSpace called with invalid pointer %p (header 0x%016llx)",
+		pointer, (unsigned long long) GetMemoryChunkHeader(pointer));
+#endif
+	return 0;					/* keep compiler quiet */
+}
+
 /*****************************************************************************
  *	  GLOBAL MEMORY															 *
  *****************************************************************************/
 
-static const MemoryContextMethods mcxt_methods[1] = {
+static volatile uint32 CritSectionCount = 0;
+
+static const MemoryContextMethods mcxt_methods[] = {
 	/* aset.c */
 	[MCTX_ASET_ID].alloc = AllocSetAlloc,
 	[MCTX_ASET_ID].free_p = AllocSetFree,
@@ -462,6 +611,76 @@ static const MemoryContextMethods mcxt_methods[1] = {
 #ifdef MEMORY_CONTEXT_CHECKING
 	[MCTX_ASET_ID].check = AllocSetCheck,
 #endif
+
+	/* generation.c */
+	[MCTX_GENERATION_ID].alloc = NULL, // GenerationAlloc,
+	[MCTX_GENERATION_ID].free_p = NULL, // GenerationFree,
+	[MCTX_GENERATION_ID].realloc = NULL, // GenerationRealloc,
+	[MCTX_GENERATION_ID].reset = NULL, // GenerationReset,
+	[MCTX_GENERATION_ID].delete_context = NULL, // GenerationDelete,
+	[MCTX_GENERATION_ID].get_chunk_context = NULL, // GenerationGetChunkContext,
+	[MCTX_GENERATION_ID].get_chunk_space = NULL, // GenerationGetChunkSpace,
+	[MCTX_GENERATION_ID].is_empty = NULL, // GenerationIsEmpty,
+	[MCTX_GENERATION_ID].stats = NULL, // GenerationStats,
+#ifdef MEMORY_CONTEXT_CHECKING
+	[MCTX_GENERATION_ID].check = NULL; // GenerationCheck,
+#endif
+
+	/* slab.c */
+	[MCTX_SLAB_ID].alloc = NULL, // SlabAlloc,
+	[MCTX_SLAB_ID].free_p = NULL, // SlabFree,
+	[MCTX_SLAB_ID].realloc = NULL, // SlabRealloc,
+	[MCTX_SLAB_ID].reset = NULL, // SlabReset,
+	[MCTX_SLAB_ID].delete_context = NULL, // SlabDelete,
+	[MCTX_SLAB_ID].get_chunk_context = NULL, // SlabGetChunkContext,
+	[MCTX_SLAB_ID].get_chunk_space = NULL, // SlabGetChunkSpace,
+	[MCTX_SLAB_ID].is_empty = NULL, // SlabIsEmpty,
+	[MCTX_SLAB_ID].stats = NULL, // SlabStats,
+#ifdef MEMORY_CONTEXT_CHECKING
+	[MCTX_SLAB_ID].check = NULL; // SlabCheck,
+#endif
+
+	/* alignedalloc.c */
+	[MCTX_ALIGNED_REDIRECT_ID].alloc = NULL,	/* not required */
+	[MCTX_ALIGNED_REDIRECT_ID].free_p = NULL, // AlignedAllocFree,
+	[MCTX_ALIGNED_REDIRECT_ID].realloc = NULL, // AlignedAllocRealloc,
+	[MCTX_ALIGNED_REDIRECT_ID].reset = NULL,	/* not required */
+	[MCTX_ALIGNED_REDIRECT_ID].delete_context = NULL,	/* not required */
+	[MCTX_ALIGNED_REDIRECT_ID].get_chunk_context = NULL, // AlignedAllocGetChunkContext,
+	[MCTX_ALIGNED_REDIRECT_ID].get_chunk_space = NULL, // AlignedAllocGetChunkSpace,
+	[MCTX_ALIGNED_REDIRECT_ID].is_empty = NULL, /* not required */
+	[MCTX_ALIGNED_REDIRECT_ID].stats = NULL,	/* not required */
+#ifdef MEMORY_CONTEXT_CHECKING
+	[MCTX_ALIGNED_REDIRECT_ID].check = NULL,	/* not required */
+#endif
+
+
+	/*
+	 * Unused (as yet) IDs should have dummy entries here.  This allows us to
+	 * fail cleanly if a bogus pointer is passed to pfree or the like.  It
+	 * seems sufficient to provide routines for the methods that might get
+	 * invoked from inspection of a chunk (see MCXT_METHOD calls below).
+	 */
+
+	[MCTX_UNUSED1_ID].free_p = BogusFree,
+	[MCTX_UNUSED1_ID].realloc = BogusRealloc,
+	[MCTX_UNUSED1_ID].get_chunk_context = BogusGetChunkContext,
+	[MCTX_UNUSED1_ID].get_chunk_space = BogusGetChunkSpace,
+
+	[MCTX_UNUSED2_ID].free_p = BogusFree,
+	[MCTX_UNUSED2_ID].realloc = BogusRealloc,
+	[MCTX_UNUSED2_ID].get_chunk_context = BogusGetChunkContext,
+	[MCTX_UNUSED2_ID].get_chunk_space = BogusGetChunkSpace,
+
+	[MCTX_UNUSED3_ID].free_p = BogusFree,
+	[MCTX_UNUSED3_ID].realloc = BogusRealloc,
+	[MCTX_UNUSED3_ID].get_chunk_context = BogusGetChunkContext,
+	[MCTX_UNUSED3_ID].get_chunk_space = BogusGetChunkSpace,
+
+	[MCTX_UNUSED4_ID].free_p = BogusFree,
+	[MCTX_UNUSED4_ID].realloc = BogusRealloc,
+	[MCTX_UNUSED4_ID].get_chunk_context = BogusGetChunkContext,
+	[MCTX_UNUSED4_ID].get_chunk_space = BogusGetChunkSpace,
 };
 
 /*
@@ -587,25 +806,6 @@ typedef struct MemoryContextCallback
 
 #define pg_node_attr(...)
 
-typedef enum NodeTag
-{
-	T_Invalid = 0,
-	T_AllocSetContext = 450
-} NodeTag;
-
-/*
- * The first field of a node of any type is guaranteed to be the NodeTag.
- * Hence the type of any node can be gotten by casting it to Node. Declaring
- * a variable to be of Node * (instead of void *) can also facilitate
- * debugging.
- */
-typedef struct Node
-{
-	NodeTag		type;
-} Node;
-
-#define nodeTag(nodeptr)		(((const Node*)(nodeptr))->type)
-
 typedef struct MemoryContextData
 {
 	pg_node_attr(abstract)		/* there are no nodes of this type */
@@ -624,6 +824,14 @@ typedef struct MemoryContextData
 	const char* ident;			/* context ID if any (just for debugging) */
 	MemoryContextCallback* reset_cbs;	/* list of reset/delete callbacks */
 } MemoryContextData;
+
+/*
+ * You should not do memory allocations within a critical section, because
+ * an out-of-memory error will be escalated to a PANIC. To enforce that
+ * rule, the allocation functions Assert that.
+ */
+#define AssertNotInCriticalSection(context) \
+	Assert(CritSectionCount == 0 || (context)->allowInCritSection)
 
 /*
  * AllocSetContext is our standard implementation of MemoryContext.
@@ -798,6 +1006,37 @@ static AllocSetFreeList context_freelists[2] =
  * to know it.
  */
 #define ALLOCSET_SEPARATE_THRESHOLD  8192
+
+ /*
+  * pg_leftmost_one_pos32
+  *		Returns the position of the most significant set bit in "word",
+  *		measured from the least significant bit.  word must not be 0.
+  */
+static inline int
+pg_leftmost_one_pos32(uint32 word)
+{
+#ifdef HAVE__BUILTIN_CLZ
+	Assert(word != 0);
+
+	return 31 - __builtin_clz(word);
+#elif defined(_MSC_VER)
+	unsigned long result;
+	bool		non_zero;
+
+	non_zero = _BitScanReverse(&result, word);
+	Assert(non_zero);
+	return (int)result;
+#else
+	int			shift = 32 - 8;
+
+	Assert(word != 0);
+
+	while ((word >> shift) == 0)
+		shift -= 8;
+
+	return shift + pg_leftmost_one_pos[(word >> shift) & 255];
+#endif							/* HAVE__BUILTIN_CLZ */
+}
 
 /*
  * Array giving the position of the left-most set bit for each possible
@@ -1053,6 +1292,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
 	 * Check whether the parameters match either available freelist.  We do
 	 * not need to demand a match of maxBlockSize.
 	 */
+#if 0
 	if (minContextSize == ALLOCSET_DEFAULT_MINSIZE &&
 		initBlockSize == ALLOCSET_DEFAULT_INITSIZE)
 		freeListIndex = 0;
@@ -1061,10 +1301,13 @@ AllocSetContextCreateInternal(MemoryContext parent,
 		freeListIndex = 1;
 	else
 		freeListIndex = -1;
-
+#endif
+	freeListIndex = -1; /* short-cut the mempool freelist */
+	
 	/*
 	 * If a suitable freelist entry exists, just recycle that context.
 	 */
+#if 0
 	if (freeListIndex >= 0)
 	{
 		AllocSetFreeList* freelist = &context_freelists[freeListIndex];
@@ -1092,7 +1335,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
 			return (MemoryContext)set;
 		}
 	}
-
+#endif
 	/* Determine size of initial block */
 	firstBlockSize = MAXALIGN(sizeof(AllocSetContext)) +
 		ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
@@ -2387,18 +2630,6 @@ Size mempool_size(MemoryContext cxt)
 	return 0;
 }
 
-#define MaxAllocSize	((Size) 0x3fffffff) /* 1 gigabyte - 1 */
-
-#define AllocSizeIsValid(size)	((Size) (size) <= MaxAllocSize)
-
-/*
- * You should not do memory allocations within a critical section, because
- * an out-of-memory error will be escalated to a PANIC. To enforce that
- * rule, the allocation functions Assert that.
- */
-#define AssertNotInCriticalSection(context) \
-	Assert(CritSectionCount == 0 || (context)->allowInCritSection)
-
 void* palloc(MemoryContext cxt, Size size)
 {
 	/* duplicates MemoryContextAlloc to avoid increased overhead */
@@ -2431,7 +2662,7 @@ void* palloc0(MemoryContext cxt, Size size)
 	/* duplicates MemoryContextAllocZero to avoid increased overhead */
 	void* ret;
 
-	Assert(MemoryContextIsValid(context));
+	Assert(MemoryContextIsValid(cxt));
 	//AssertNotInCriticalSection(context);
 
 	if (!AllocSizeIsValid(size))

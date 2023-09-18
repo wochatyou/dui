@@ -263,7 +263,8 @@ public:
 
 	~XWindowT() 
 	{
-		mempool_destroy(m_pool);
+		if(nullptr != m_pool)
+			mempool_destroy(m_pool);
 	}
 
 	bool IsRealWindow(void* hwnd)

@@ -91,6 +91,10 @@ public:
 		if (nullptr == m_pool)
 			return (-2);
 
+		void* p = palloc(m_pool, 123);
+		if (nullptr != p)
+			pfree(p);
+
 		return 0;
 	}
 
