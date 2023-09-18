@@ -930,6 +930,7 @@ MemoryChunkGetBlock(MemoryChunk* chunk)
 	return (void*)((char*)chunk - HdrMaskBlockOffset(chunk->hdrmask));
 }
 
+#if 0
 /*
  * Rather than repeatedly creating and deleting memory contexts, we keep some
  * freed contexts in freelists so that we can hand them out again with little
@@ -971,11 +972,12 @@ static AllocSetFreeList context_freelists[2] =
 		0, NULL
 	}
 };
+#endif
 
-	/*
-	 * Recommended default alloc parameters, suitable for "ordinary" contexts
-	 * that might hold quite a lot of data.
-	 */
+/*
+ * Recommended default alloc parameters, suitable for "ordinary" contexts
+ * that might hold quite a lot of data.
+ */
 #define ALLOCSET_DEFAULT_MINSIZE   0
 #define ALLOCSET_DEFAULT_INITSIZE  (8 * 1024)
 #define ALLOCSET_DEFAULT_MAXSIZE   (8 * 1024 * 1024)
@@ -1253,7 +1255,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
 	Size initBlockSize,
 	Size maxBlockSize)
 {
-	int			freeListIndex;
+	//int			freeListIndex;
 	Size		firstBlockSize;
 	AllocSet	set;
 	AllocBlock	block;
@@ -1302,7 +1304,6 @@ AllocSetContextCreateInternal(MemoryContext parent,
 	else
 		freeListIndex = -1;
 #endif
-	freeListIndex = -1; /* short-cut the mempool freelist */
 	
 	/*
 	 * If a suitable freelist entry exists, just recycle that context.
@@ -1381,7 +1382,7 @@ AllocSetContextCreateInternal(MemoryContext parent,
 	set->initBlockSize = initBlockSize;
 	set->maxBlockSize = maxBlockSize;
 	set->nextBlockSize = initBlockSize;
-	set->freeListIndex = freeListIndex;
+	set->freeListIndex = -1; // freeListIndex;
 
 	/*
 	 * Compute the allocation chunk size limit for this context.  It can't be
@@ -1523,6 +1524,10 @@ AllocSetDelete(MemoryContext context)
 	/* Remember keeper block size for Assert below */
 	keepersize = set->keeper->endptr - ((char*)set);
 
+
+	Assert(-1 == set->freeListIndex); // we do not use the memory pool freelist
+
+#if 0
 	/*
 	 * If the context is a candidate for a freelist, put it into that freelist
 	 * instead of destroying it.
@@ -1564,6 +1569,7 @@ AllocSetDelete(MemoryContext context)
 
 		return;
 	}
+#endif
 
 	/* Free all blocks, except the keeper which is part of context header */
 	while (block != NULL)
@@ -1602,7 +1608,7 @@ AllocSetDelete(MemoryContext context)
  * is marked, as mcxt.c will set it to UNDEFINED.  In some paths we will
  * return space that is marked NOACCESS - AllocSetRealloc has to beware!
  */
-void*
+static void*
 AllocSetAlloc(MemoryContext context, Size size)
 {
 	AllocSet	set = (AllocSet)context;
@@ -1901,7 +1907,7 @@ AllocSetAlloc(MemoryContext context, Size size)
  * AllocSetFree
  *		Frees allocated memory; memory is removed from the set.
  */
-void
+static void
 AllocSetFree(void* pointer)
 {
 	AllocSet	set;
@@ -2011,7 +2017,7 @@ AllocSetFree(void* pointer)
  * (In principle, we could use VALGRIND_GET_VBITS() to rediscover the old
  * request size.)
  */
-void*
+static void*
 AllocSetRealloc(void* pointer, Size size)
 {
 	AllocBlock	block;
@@ -2275,7 +2281,7 @@ AllocSetRealloc(void* pointer, Size size)
  * AllocSetGetChunkContext
  *		Return the MemoryContext that 'pointer' belongs to.
  */
-MemoryContext
+static MemoryContext
 AllocSetGetChunkContext(void* pointer)
 {
 	MemoryChunk* chunk = PointerGetMemoryChunk(pointer);
@@ -2304,7 +2310,7 @@ AllocSetGetChunkContext(void* pointer)
  *		Given a currently-allocated chunk, determine the total space
  *		it occupies (including all memory-allocation overhead).
  */
-Size
+static Size
 AllocSetGetChunkSpace(void* pointer)
 {
 	MemoryChunk* chunk = PointerGetMemoryChunk(pointer);
@@ -2338,7 +2344,7 @@ AllocSetGetChunkSpace(void* pointer)
  * AllocSetIsEmpty
  *		Is an allocset empty of any allocated space?
  */
-bool
+static bool
 AllocSetIsEmpty(MemoryContext context)
 {
 	Assert(AllocSetIsValid(context));
@@ -2363,7 +2369,7 @@ AllocSetIsEmpty(MemoryContext context)
  * totals: if not NULL, add stats about this context into *totals.
  * print_to_stderr: print stats to stderr if true, elog otherwise.
  */
-void
+static void
 AllocSetStats(MemoryContext context,
 	MemoryStatsPrintFunc printfunc, void* passthru,
 	MemoryContextCounters* totals, bool print_to_stderr)
@@ -2441,7 +2447,7 @@ AllocSetStats(MemoryContext context,
  * find yourself in an infinite loop when trouble occurs, because this
  * routine will be entered again when elog cleanup tries to release memory!
  */
-void
+static void
 AllocSetCheck(MemoryContext context)
 {
 	AllocSet	set = (AllocSet)context;
