@@ -31,6 +31,7 @@ typedef struct XChatMessage
 } XChatMessage;
 
 // _TextWrapIdxTab[0] is the length of the elements behind it.
+// The first two bytes are the lines parsered. Each element has two parts: 2-byte string base index, and 2-byte string length
 static U16 _TextWrapIdxTab[MAX_INPUT_MESSAGE_LEN];
 
 class XWindow4 : public XWindowT <XWindow4>
@@ -124,7 +125,7 @@ public:
 	{
 		int ret = 0;
 
-		BLResult blResult = m_font0.createFromFace(g_fontFace, 16.0f);
+		BLResult blResult = m_font0.createFromFace(g_fontFace, 15.0f);
 		if (BL_SUCCESS != blResult)
 			return (-1);
 
@@ -147,7 +148,7 @@ public:
 		int W, H;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
-		U16 i, lines;
+		U16 i, lines, u16Num;
 		XChatMessage* p = m_rootMessage;
 		
 		assert(w > 300);
@@ -162,11 +163,12 @@ public:
 			lines = _TextWrapIdxTab[0];
 			if (lines > 0)
 			{
+				u16Num = 1 + (lines << 1);
 				pfree(p->textWrapTab_);
-				p->textWrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * (lines + 1));
+				p->textWrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * u16Num);
 				if (nullptr != p->textWrapTab_)
 				{
-					for (i = 0; i <= lines; i++)
+					for (i = 0; i <= u16Num; i++)
 						p->textWrapTab_[i] = _TextWrapIdxTab[i];
 
 					H = m_lineHeight0 * (lines + 1);
@@ -190,23 +192,78 @@ public:
 
 	int TextLayout(int width, U16* txt, U16 characters)
 	{
+		int w, MaxWidth = 0;
+		U16  charMaxIdx, charLen, charBaseIdx, i, idx;
+
+		assert(characters < MAX_INPUT_MESSAGE_LEN);
+		assert(characters > 0);
+
+		_TextWrapIdxTab[0] = 0; // clear the wrap table
+
+		charMaxIdx = characters - 1;
+		charBaseIdx = 0;
+		for(i=0; i<characters; i++)  // we scan the whole string, maybe we find "\n", maybe not
+		{
+			if(0 == txt[i])  // it is a zero-terminated string
+			{
+				charMaxIdx = i-1;
+				break;
+			}
+
+			if(0x0A == txt[i])
+			{
+				charLen = i - charBaseIdx;
+				if(charLen > 0)
+				{
+					w = TextLayoutOneLine(width, txt, charBaseIdx, charLen);
+					if(MaxWidth < w)
+						MaxWidth = w;
+				}
+				else  // "\n\n\n\n"
+				{
+					idx = _TextWrapIdxTab[0] << 1;
+					_TextWrapIdxTab[idx + 1] = charBaseIdx;
+					_TextWrapIdxTab[idx + 2] = 0;
+					_TextWrapIdxTab[0]++;
+				}
+				charBaseIdx = i + 1; // pointing to the next character of "\n"
+			}
+		}
+
+		if(charBaseIdx < charMaxIdx) // we still have characters after the last "\n"
+		{
+			w = TextLayoutOneLine(width, txt, charBaseIdx, (charMaxIdx - charBaseIdx + 1));
+			if(MaxWidth < w)
+				MaxWidth = w;
+		}
+
+		return MaxWidth;
+	}
+
+
+	// We assume that txt is a single line, which means there is no "\n" in it.
+	int TextLayoutOneLine(int width, U16* txt, U16 base, U16 len)
+	{
 		int MaxWidth = width;
 		BLTextMetrics tm;
 		BLGlyphBuffer gb;
 		double wm;
 		double WM = (double)width;
-		U16 charBaseLen,charLen, halfSize, i;
-		U16* p = txt;
-		U16 charRemaining = characters;
-		U16 lines = 0;
-		U16* wrapIdx = _TextWrapIdxTab + 1; // _TextWrapIdxTab[0] is used to save the length
-#ifdef DUI_DEBUG
-		int charSum = 0;
-#endif			
-		assert(characters < MAX_INPUT_MESSAGE_LEN);
-		assert(characters > 0);
+		U16 charBaseIdx, charOldLen, charLen, charRemaining;
+		U16 charBaseLen, halfSize, lines, i;
+		U16* p;
+		U16* wrapIdx;
 
-		do
+#ifdef DUI_DEBUG
+		U16 charSum = 0;
+#endif			
+		lines = _TextWrapIdxTab[0];
+		charRemaining = len;
+		wrapIdx = _TextWrapIdxTab + 1 + (lines<<1) ; // _TextWrapIdxTab[0] is used to save the length
+		charBaseIdx = base;
+		p = txt + charBaseIdx;
+
+		while(true)
 		{
 			charBaseLen = 0;
 			halfSize = charRemaining;
@@ -228,6 +285,9 @@ public:
 				halfSize >>= 1;
 			}
 
+			assert(charLen > 0);
+			assert(charLen <= charRemaining);			
+
 			if (charRemaining > charLen)
 			{
 				for (i = 0; i < charRemaining - charLen; i++)
@@ -244,35 +304,42 @@ public:
 
 				if(IsAlphabet(p[charLen-1]) && IsAlphabet(p[charLen])) // we cannot split the whole word
 				{
-					U16 charLenOld = charLen;
+					charOldLen = charLen;
 					while(charLen > 0)
 					{
 						charLen--;
 						if(!IsAlphabet(p[charLen-1]))
 							break;
 					}
-					if(0 == charLen)
-						charLen = charLenOld;
+					if(0 == charLen)  // all characters of this line is a-z or A-Z, so we have to split the long word!
+						charLen = charOldLen;
 				}
 			}
 
+			*wrapIdx++ = charBaseIdx;  
 			*wrapIdx++ = charLen;  // push the maximum characters per line into the wrap index table
+			charBaseIdx += charLen;
 			lines++;
+
 #ifdef DUI_DEBUG
 			charSum += charLen;
 #endif		
-			assert(charLen <= charRemaining);	
-			charRemaining -= charLen;
-			if(0 == charRemaining)
-				break;
-			p += charLen;
-		} while (true);
+			assert(charLen <= charRemaining);
 
-		assert(lines < MAX_INPUT_MESSAGE_LEN);
+			charRemaining -= charLen;
+
+			if(0 == charRemaining) // all charachters have been processed
+				break;
+			
+			p += charLen;
+		}
+
+		assert(lines < (MAX_INPUT_MESSAGE_LEN >> 1));
 		_TextWrapIdxTab[0] = lines;
+
 #ifdef DUI_DEBUG
-			assert(charSum == characters);
-#endif	
+			assert(charSum == len);
+#endif
 		if(1 == lines) // we only have one line, we can shrink the width
 			MaxWidth = (int)wm;
 		return MaxWidth;
@@ -281,7 +348,7 @@ public:
 	int Draw()
 	{
 		int W, H, x, y, dx, dy, pos, width;
-		U16 i, lines, charNum;
+		U16 i, lines, baseIdx, charNum;
 		U16* m;
 		U16* msg;
 		int w = m_area.right - m_area.left;
@@ -338,12 +405,15 @@ public:
 					y = m_lineHeight0;
 					for (i = 0; i < lines; i++)
 					{
+						baseIdx = *m++;
 						charNum = *m++;
-						gb.setUtf16Text(msg, charNum);
-						m_font0.shape(gb);
-						ctx.fillGlyphRun(BLPoint(10, y + 5), m_font0, gb.glyphRun(), textColor0);
+						if(charNum > 0)
+						{
+							gb.setUtf16Text(msg + baseIdx, charNum);
+							m_font0.shape(gb);
+							ctx.fillGlyphRun(BLPoint(10, y + 5), m_font0, gb.glyphRun(), textColor0);
+						}
 						y += m_lineHeight0;
-						msg += charNum;
 					}
 
 					blResult = img.getData(&imgdata);
