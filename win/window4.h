@@ -2,7 +2,30 @@
 #define __WOCHAT_WINDOWS4_H__
 
 #include "dui/dui_win.h"
-#include <vector>
+
+#include "testdata.h"
+
+#define MAX_INPUT_MESSAGE_LEN	(1<<16)  // we only allow maximum 64KB -1 characters input
+
+U16 name[] = { 0x7b11,0x50b2,0x6c5f,0x6e56, 0 };
+
+typedef struct XChatMessage
+{
+	XChatMessage* next_;
+	U32* icon_;        // the bitmap data of this icon
+	U8   w_;           // the width in pixel of this icon
+	U8   h_;           // the height in pixel of this icon
+	int  height_;	   // in pixel
+	int  width_;	   // in pixel
+	U16  state_;
+	U16  msgLen_;
+	U64  ts_;  // the time stamp. 
+	U16* name_;       // The name of this people      
+	U16* message_;    // real message
+	U16* wrapTab_;
+	int  textLayoutWidth_;
+	U8* obj_;         // point to GIF/APNG/Video/Pic etc
+} XChatMessage;
 
 U16 testxt[] = {
 	0x6c38,0x548c,0x4e5d,0x5e74,0xff0c,0x5c81,0x5728,0x7678,0x4e11,0xff0c,0x66ae,0x6625,0x4e4b,0x521d,0xff0c,0x4f1a,
@@ -32,6 +55,9 @@ U16 testxt[] = {
 	0x6709,0x611f,0x4e8e,0x65af,0x6587,0x3002,0x0000
 };
 
+// _TextWrapIdxTab[0] is the length of the elements behind it.
+static U16 _TextWrapIdxTab[MAX_INPUT_MESSAGE_LEN];
+
 class XWindow4 : public XWindowT <XWindow4>
 {
 private:
@@ -40,6 +66,7 @@ private:
 		GAP_BOTTOM3 = 10,
 		GAP_LEFT3 = 0,
 		GAP_RIGHT3 = 0,
+		GAP_MESSAGE = 20
 	};
 
 public:
@@ -59,7 +86,7 @@ public:
 	int		m_lineHeight0 = 0;
 	int		m_lineHeight1 = 0;
 
-	std::vector<U16> m_wrapIdx;
+	XChatMessage* m_rootMessage = nullptr;
 
 	int UpdateChatHistory(uint16_t* msgText, U8 msgtype = 0)
 	{
@@ -68,15 +95,50 @@ public:
 
 	int LoadChatHistory()
 	{
+		U16 len;
+		U16* pTxt;
+		XChatMessage* p = nullptr;
+		XChatMessage* q = nullptr;
+
+		InitalizeTestText();
+
+		size_t size = sizeof(txtdata)/sizeof(U16*);
+		
+		for (size_t i = 0; i < size; i++)
+		{
+			pTxt = txtdata[i];
+			assert(pTxt);
+			len = 0;
+			while (0 != *pTxt++)
+				len++;
+			
+			assert(m_pool);
+			p = (XChatMessage*)palloc0(m_pool, sizeof(XChatMessage));
+			if (nullptr == p)
+				break;
+
+			if (nullptr == m_rootMessage)
+				m_rootMessage = p;
+			if (nullptr != q)
+				q->next_ = p;
+
+			q = p;
+			p->textLayoutWidth_ = 0;
+			p->icon_ = (0 == i % 2) ? (U32*)xbmpHeadGirl : (U32*)xbmpHeadMe;
+			p->w_ = p->h_ = 34;
+			p->state_ = i;
+			p->name_ = (U16*)name;
+			p->msgLen_ = len;
+			p->message_ = txtdata[i];
+			p->next_ = nullptr;
+		}
+
 		return 0;
 	}
 
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
 		int ret = 0;
-
-		m_sizeAll.cy = 3000;
-		m_sizeLine.cy = 128;
 
 		BLResult blResult = m_font0.createFromFace(g_fontFace, 16.0f);
 		if (BL_SUCCESS != blResult)
@@ -85,50 +147,106 @@ public:
 		BLFontMetrics fm = m_font0.metrics();
 		m_lineHeight0 = (int)(fm.ascent + fm.descent + fm.lineGap);
 		assert(m_lineHeight0 > 0);
+		m_sizeLine.cy = m_lineHeight0;
 
 		m_pool = mempool_create(0, 0, 0);
-
 		if (nullptr == m_pool)
 			return (-2);
 
-		void* p = palloc(m_pool, 123);
-		if (nullptr != p)
-			pfree(p);
+		LoadChatHistory();
 
 		return 0;
+	}
+
+	void UpdatePosition() 
+	{
+		int W, H;
+		int w = m_area.right - m_area.left;
+		int h = m_area.bottom - m_area.top;
+		U16 i, lines;
+		XChatMessage* p = m_rootMessage;
+		
+		assert(w > 300);
+		W = DUI_ALIGN_DEFAULT32(w - 200) - 16;
+
+		m_sizeAll.cy = 0;
+
+		while (nullptr != p)
+		{
+			if (0 == p->textLayoutWidth_)
+				p->textLayoutWidth_ = W;
+
+			if (nullptr == p->wrapTab_ || W != p->textLayoutWidth_)
+			{
+				p->width_ = TextLayout(W, p->message_, p->msgLen_);
+				
+				lines = _TextWrapIdxTab[0];
+				if (lines > 0)
+				{
+					pfree(p->wrapTab_);
+					p->wrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * (lines + 1));
+					if (nullptr == p->wrapTab_)
+					{
+						p = p->next_;
+						continue;
+					}
+					for (i = 0; i <= lines; i++)
+						p->wrapTab_[i] = _TextWrapIdxTab[i];
+				}
+				else
+				{
+					p = p->next_;
+					continue;
+				}
+			}
+			assert(nullptr != p->wrapTab_);
+			lines = p->wrapTab_[0];
+			assert(lines > 0);
+			H = m_lineHeight0 * (lines + 1);
+			p->height_ = H + GAP_MESSAGE;
+			m_sizeAll.cy += p->height_;
+			p = p->next_;
+		}
+
+		m_ptOffset.y = (m_sizeAll.cy > h) ? m_sizeAll.cy - h : 0;
 	}
 
 	int DoSize(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
-		int h = m_area.bottom - m_area.top;
-		m_ptOffset.y = m_sizeAll.cy - h;
-
+		UpdatePosition();
 		return 0;
 	}
 
-	void TextLayout(int width, U16* txt, U16 characters)
+	int TextLayout(int width, U16* txt, U16 characters)
 	{
-		int w;
+		double wm, WM;
+		U16* wrapIdx = _TextWrapIdxTab;
 		BLTextMetrics tm;
 		BLGlyphBuffer gb;
 
-		assert(characters > 0);
-		m_wrapIdx.clear();
+		assert(characters < MAX_INPUT_MESSAGE_LEN);
 
 		gb.setUtf16Text(txt, characters);
 		m_font0.shape(gb);
 		m_font0.getTextMetrics(gb, tm);
 
-		w = (int)(tm.boundingBox.x1 - tm.boundingBox.x0);
-		if (w < width)
+		WM = (double)width;
+		wm = tm.boundingBox.x1 - tm.boundingBox.x0;
+		if (wm < WM)
 		{
-			m_wrapIdx.push_back(characters);
+			wrapIdx[0] = 1;
+			wrapIdx[1] = characters;
+			return (int)wm;
 		}
 		else // the text needs to be wrapped.
 		{
 			U16 charBaseLen,charLen, halfSize, i;
 			U16* p = txt;
+			U16 lines = 0;
 			U16 charRemaining = characters;
+
+			wrapIdx = _TextWrapIdxTab + 1;
+
 			do
 			{
 				charBaseLen = 0;
@@ -139,8 +257,8 @@ public:
 					gb.setUtf16Text(p, charLen);
 					m_font0.shape(gb);
 					m_font0.getTextMetrics(gb, tm);
-					w = (int)(tm.boundingBox.x1 - tm.boundingBox.x0);
-					if (w < width)
+					wm = tm.boundingBox.x1 - tm.boundingBox.x0;
+					if (wm < WM)
 					{
 						charBaseLen = charLen;
 						if (charLen >= charRemaining)
@@ -156,102 +274,106 @@ public:
 						gb.setUtf16Text(p, charLen + i);
 						m_font0.shape(gb);
 						m_font0.getTextMetrics(gb, tm);
-						w = (int)(tm.boundingBox.x1 - tm.boundingBox.x0);
-						if (w >= width)
+						wm = tm.boundingBox.x1 - tm.boundingBox.x0;
+						if (wm >= WM)
 							break;
 					}
 					charLen += (i - 1); // we find the maxium characters that fit one line
 				}
-				m_wrapIdx.push_back(charLen);
+				lines++;
+				*wrapIdx++ = charLen;
 				p += charLen;
 				if (charRemaining > charLen)
 					charRemaining -= charLen;
 			} 
 			while (charRemaining > charLen);
-			m_wrapIdx.push_back(charRemaining);
+			lines++;
+			*wrapIdx++ = charRemaining;
+			assert(lines < MAX_INPUT_MESSAGE_LEN);
+			_TextWrapIdxTab[0] = lines;
 		}
+		return width;
 	}
 
 	int Draw()
 	{
-		int W, H, lines;
+		int W, H, x, y, dx, dy, pos, width;
+		U16 i, lines, charNum;
+		U16* m;
+		U16* msg;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
+
+		BLResult blResult;
 		BLRgba32 bkcolor0(0xFF6AEA9Eu);
 		BLRgba32 bkcolor1(0xFFFFFFFFu);
 		BLRgba32 textColor0(0xFF333333u);
+		BLImageData imgdata = { 0 };
+		BLGlyphBuffer gb;
 
+		XChatMessage* p = m_rootMessage;
+
+		assert(w > 200);
 		W = DUI_ALIGN_DEFAULT32(w - 200);
 
-		U16 charNumTotal = 390;
-		TextLayout(W - 10, testxt, charNumTotal);
-
-		lines = (int)m_wrapIdx.size();
-		assert(m_lineHeight0 > 0);
-		H = (m_lineHeight0 + 1) * lines;
-
-		ScreenDrawRectRound(m_screen, w, h, (U32*)xbmpHeadMe, 34, 34, w - 60, 20, m_backgroundColor);
-
-		BLImage img;
-		BLResult blResult = img.create(W, H, BL_FORMAT_PRGB32);
-
-		if (BL_SUCCESS == blResult)
+		pos = 0;
+		while (nullptr != p)
 		{
-			int x, y;
-			U16 charNum;
-			U16* p;
+			H = p->height_;
+			
+			assert(H > GAP_MESSAGE);
 
-			BLRgba32 color(0xFF333333u);
-			BLRgba32 selcolor(0xFFFACE87u);
-			BLRgba32 textColor1(0xFF777777u);
-			BLRgba32 textColor2(0xFF555555u);
-
-			BLImageData imgdata = { 0 };
-			BLGlyphBuffer gb;
-
-			BLContext ctx(img);
-			ctx.fillAll(bkcolor0);
-
-			p = (U16*)testxt;
-			y = m_lineHeight0;
-			for (int i = 0; i < lines; i++)
+			if (pos + H > m_ptOffset.y && pos < m_ptOffset.y + h)
 			{
-				charNum = m_wrapIdx[i];
-				gb.setUtf16Text(p, charNum);
-				m_font0.shape(gb);
-				ctx.fillGlyphRun(BLPoint(5, y), m_font0, gb.glyphRun(), textColor0);
-				y += m_lineHeight0;
-				p += charNum;
+				BLImage img;
+				width = W;
+				if(p->width_ < W - 16)
+					width = DUI_ALIGN_DEFAULT32(p->width_ + 16);
+
+				blResult = img.create(width, H - GAP_MESSAGE, BL_FORMAT_PRGB32);
+
+				if (BL_SUCCESS == blResult)
+				{
+					BLContext ctx(img);
+					if (p->state_ % 2) // me
+					{
+						ctx.fillAll(bkcolor0);
+						dx = w - width - 60;
+						x = w - m_scrollWidth - p->w_;
+					}
+					else // girl
+					{
+						ctx.fillAll(bkcolor1);
+						dx = 60;
+						x = 10;
+					}
+
+					m = p->wrapTab_;
+					assert(nullptr != m);
+					lines = *m++;
+					msg = p->message_;
+					y = m_lineHeight0;
+					for (i = 0; i < lines; i++)
+					{
+						charNum = *m++;
+						gb.setUtf16Text(msg, charNum);
+						m_font0.shape(gb);
+						ctx.fillGlyphRun(BLPoint(5, y + 5), m_font0, gb.glyphRun(), textColor0);
+						y += m_lineHeight0;
+						msg += charNum;
+					}
+
+					blResult = img.getData(&imgdata);
+					if (BL_SUCCESS == blResult)
+					{
+						assert(nullptr != p->icon_);
+						ScreenDrawRectRound(m_screen, w, h, (U32*)p->icon_, p->w_, p->h_, x, pos - m_ptOffset.y, m_backgroundColor);
+						ScreenDrawRectRound(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, dx, pos - m_ptOffset.y, m_backgroundColor);
+					}
+				}
 			}
-
-			blResult = img.getData(&imgdata);
-			if (BL_SUCCESS == blResult)
-			{
-				ScreenDrawRect(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, 120, 20);
-			}
-		}
-
-		ScreenDrawRectRound(m_screen, w, h, (U32*)xbmpHeadGirl, 34, 34, 10, 400, m_backgroundColor);
-		BLImage img1;
-		blResult = img1.create(60, m_lineHeight0<<1, BL_FORMAT_PRGB32);
-
-		if (BL_SUCCESS == blResult)
-		{
-			U16 txt[] = { 0x725b, 0x903c, 0xff01 };
-			BLContext ctx(img1);
-			ctx.fillAll(bkcolor1);
-			BLImageData imgdata = { 0 };
-			BLGlyphBuffer gb;
-			gb.setUtf16Text((const U16*)txt, 3);
-			m_font0.shape(gb);
-			ctx.fillGlyphRun(BLPoint(10, m_lineHeight0 + 4), m_font0, gb.glyphRun(), textColor0);
-
-			blResult = img1.getData(&imgdata);
-			if (BL_SUCCESS == blResult)
-			{
-				ScreenDrawRect(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, 50, 400);
-			}
-
+			pos += H;
+			p = p->next_;
 		}
 		return 0;
 	}

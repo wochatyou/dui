@@ -2695,7 +2695,10 @@ void pfree(void* pointer)
 	MemoryContext context = GetMemoryChunkContext(pointer);
 #endif
 
-	MCXT_METHOD(pointer, free_p) (pointer);
+	if (NULL != pointer)
+	{
+		MCXT_METHOD(pointer, free_p) (pointer);
+	}
 
 #ifdef USE_VALGRIND
 	if (method != MCTX_ALIGNED_REDIRECT_ID)
