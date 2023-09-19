@@ -42,6 +42,8 @@
 #define U32     uint32_t
 #define U64     uint64_t
 
+#define DUI_DEBUG	1
+
 /* DUI_ALIGN() is only to be used to align on a power of 2 boundary */
 #define DUI_ALIGN(size, boundary) (((size) + ((boundary) -1)) & ~((boundary) - 1))
 #define DUI_ALIGN_DEFAULT32(size)	DUI_ALIGN(size, 4)

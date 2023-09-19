@@ -11,6 +11,8 @@ U16 name[] = { 0x7b11,0x50b2,0x6c5f,0x6e56, 0 };
 
 U32 littleArrowMe[4 * 8] = { 0 };
 
+#define IsAlphabet(c)		(((c) >= 0x41 && (c) <= 0x5A) || ((c) >= 0x61 && (c) <= 0x7A))
+
 typedef struct XChatMessage
 {
 	XChatMessage* next_;
@@ -24,8 +26,8 @@ typedef struct XChatMessage
 	U64  ts_;		// the time stamp. 
 	U16* name_;     // The name of this people      
 	U16* message_;  // real message
-	U16* wrapTab_;
-	U8* obj_;       // point to GIF/APNG/Video/Pic etc
+	U16* textWrapTab_; // the struct of this table is the same as _TextWrapIdxTab
+	U8*  obj_;       // point to GIF/APNG/Video/Pic etc
 } XChatMessage;
 
 // _TextWrapIdxTab[0] is the length of the elements behind it.
@@ -92,7 +94,7 @@ public:
 			pTxt = txtdata[i];
 			assert(pTxt);
 			len = 0;
-			while (0 != *pTxt++)
+			while (0 != *pTxt++ && len < MAX_INPUT_MESSAGE_LEN)  // we only allow MAX_INPUT_MESSAGE_LEN - 1 characters in one message
 				len++;
 			
 			assert(m_pool);
@@ -160,12 +162,12 @@ public:
 			lines = _TextWrapIdxTab[0];
 			if (lines > 0)
 			{
-				pfree(p->wrapTab_);
-				p->wrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * (lines + 1));
-				if (nullptr != p->wrapTab_)
+				pfree(p->textWrapTab_);
+				p->textWrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * (lines + 1));
+				if (nullptr != p->textWrapTab_)
 				{
 					for (i = 0; i <= lines; i++)
-						p->wrapTab_[i] = _TextWrapIdxTab[i];
+						p->textWrapTab_[i] = _TextWrapIdxTab[i];
 
 					H = m_lineHeight0 * (lines + 1);
 					p->height_ = H + GAP_MESSAGE;
@@ -184,81 +186,96 @@ public:
 		return 0;
 	}
 
+#define DUI_DEBUG	1
+
 	int TextLayout(int width, U16* txt, U16 characters)
 	{
-		double wm, WM;
-		U16* wrapIdx = _TextWrapIdxTab;
+		int MaxWidth = width;
 		BLTextMetrics tm;
 		BLGlyphBuffer gb;
-
+		double wm;
+		double WM = (double)width;
+		U16 charBaseLen,charLen, halfSize, i;
+		U16* p = txt;
+		U16 charRemaining = characters;
+		U16 lines = 0;
+		U16* wrapIdx = _TextWrapIdxTab + 1; // _TextWrapIdxTab[0] is used to save the length
+#ifdef DUI_DEBUG
+		int charSum = 0;
+#endif			
 		assert(characters < MAX_INPUT_MESSAGE_LEN);
+		assert(characters > 0);
 
-		gb.setUtf16Text(txt, characters);
-		m_font0.shape(gb);
-		m_font0.getTextMetrics(gb, tm);
-
-		WM = (double)width;
-		wm = tm.boundingBox.x1 - tm.boundingBox.x0;
-		if (wm < WM)
+		do
 		{
-			wrapIdx[0] = 1;
-			wrapIdx[1] = characters;
-			return (int)wm;
-		}
-		else // the text needs to be wrapped.
-		{
-			U16 charBaseLen,charLen, halfSize, i;
-			U16* p = txt;
-			U16 lines = 0;
-			U16 charRemaining = characters;
-
-			wrapIdx = _TextWrapIdxTab + 1;
-			do
+			charBaseLen = 0;
+			halfSize = charRemaining;
+			while (0 != halfSize)
 			{
-				charBaseLen = 0;
-				halfSize = charRemaining;
-				while (0 != halfSize)
+				charLen = charBaseLen + halfSize;
+				assert(charLen <= charRemaining);
+
+				gb.setUtf16Text(p, charLen);
+				m_font0.shape(gb);
+				m_font0.getTextMetrics(gb, tm);
+				wm = tm.boundingBox.x1 - tm.boundingBox.x0;
+				if (wm < WM)
 				{
-					charLen = charBaseLen + halfSize;
-					gb.setUtf16Text(p, charLen);
+					charBaseLen = charLen;
+					if (charLen == charRemaining)
+						break;
+				}
+				halfSize >>= 1;
+			}
+
+			if (charRemaining > charLen)
+			{
+				for (i = 0; i < charRemaining - charLen; i++)
+				{
+					gb.setUtf16Text(p, charLen + i);
 					m_font0.shape(gb);
 					m_font0.getTextMetrics(gb, tm);
 					wm = tm.boundingBox.x1 - tm.boundingBox.x0;
-					if (wm < WM)
-					{
-						charBaseLen = charLen;
-						if (charLen >= charRemaining)
-							break;
-					}
-					halfSize >>= 1;
+					if (wm >= WM)
+						break;
 				}
+				charLen += i; // we find the maxium characters that fit one line
+				charLen--;
 
-				if (charRemaining > charLen)
+				if(IsAlphabet(p[charLen-1]) && IsAlphabet(p[charLen])) // we cannot split the whole word
 				{
-					for (i = 0; i < charRemaining - charLen; i++)
+					U16 charLenOld = charLen;
+					while(charLen > 0)
 					{
-						gb.setUtf16Text(p, charLen + i);
-						m_font0.shape(gb);
-						m_font0.getTextMetrics(gb, tm);
-						wm = tm.boundingBox.x1 - tm.boundingBox.x0;
-						if (wm >= WM)
+						charLen--;
+						if(!IsAlphabet(p[charLen-1]))
 							break;
 					}
-					charLen += (i - 1); // we find the maxium characters that fit one line
+					if(0 == charLen)
+						charLen = charLenOld;
 				}
-				lines++;
-				*wrapIdx++ = charLen;
-				p += charLen;
-				if (charRemaining > charLen)
-					charRemaining -= charLen;
-			} 
-			while (charRemaining > charLen);
+			}
+
+			*wrapIdx++ = charLen;  // push the maximum characters per line into the wrap index table
 			lines++;
-			*wrapIdx++ = charRemaining;
-			assert(lines < MAX_INPUT_MESSAGE_LEN);
-			_TextWrapIdxTab[0] = lines;
-		}
-		return width;
+#ifdef DUI_DEBUG
+			charSum += charLen;
+#endif		
+			assert(charLen <= charRemaining);	
+			charRemaining -= charLen;
+			if(0 == charRemaining)
+				break;
+			p += charLen;
+		} while (true);
+
+		assert(lines < MAX_INPUT_MESSAGE_LEN);
+		_TextWrapIdxTab[0] = lines;
+#ifdef DUI_DEBUG
+			assert(charSum == characters);
+#endif	
+		if(1 == lines) // we only have one line, we can shrink the width
+			MaxWidth = (int)wm;
+		return MaxWidth;
 	}
 
 	int Draw()
@@ -314,7 +331,7 @@ public:
 						x = 10;
 					}
 
-					m = p->wrapTab_;
+					m = p->textWrapTab_;
 					assert(nullptr != m);
 					lines = *m++;
 					msg = p->message_;
