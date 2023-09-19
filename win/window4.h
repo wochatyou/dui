@@ -9,6 +9,8 @@
 
 U16 name[] = { 0x7b11,0x50b2,0x6c5f,0x6e56, 0 };
 
+U32 littleArrowMe[4 * 8] = { 0 };
+
 typedef struct XChatMessage
 {
 	XChatMessage* next_;
@@ -71,9 +73,19 @@ private:
 public:
 	XWindow4()
 	{
+		U32* p;
+		U32* q;
 		m_backgroundColor = 0xFFF5F5F5;
 		m_message = WM_WIN4_MESSAGE;
 		m_property |= (DUI_PROP_HASVSCROLL | DUI_PROP_HANDLEVWHEEL);
+
+		p = (U32*)xbmpXMeArrow;
+		q = (U32*)littleArrowMe;
+		for (int i = 0; i < (4 * 8); i++)
+		{
+			*q++ = (0xFFFFFFFF == *p) ? m_backgroundColor : *p;
+			p++;
+		}
 	}
 
 	~XWindow4()
@@ -352,6 +364,9 @@ public:
 						assert(nullptr != p->icon_);
 						ScreenDrawRectRound(m_screen, w, h, (U32*)p->icon_, p->w_, p->h_, x, pos - m_ptOffset.y, m_backgroundColor);
 						ScreenDrawRectRound(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, dx, pos - m_ptOffset.y, m_backgroundColor);
+						if (p->state_ % 2)
+							ScreenDrawRect(m_screen, w, h, (U32*)littleArrowMe, 4, 8, dx + imgdata.size.w, pos - m_ptOffset.y + 13);
+						
 					}
 				}
 			}
