@@ -14,18 +14,18 @@ U32 littleArrowMe[4 * 8] = { 0 };
 typedef struct XChatMessage
 {
 	XChatMessage* next_;
-	U32* icon_;        // the bitmap data of this icon
-	U8   w_;           // the width in pixel of this icon
-	U8   h_;           // the height in pixel of this icon
-	int  height_;	   // in pixel
-	int  width_;	   // in pixel
+	U32* icon_;     // the bitmap data of this icon
+	U8   w_;        // the width in pixel of this icon
+	U8   h_;        // the height in pixel of this icon
+	int  height_;   // in pixel
+	int  width_;    // in pixel
 	U16  state_;
 	U16  msgLen_;
-	U64  ts_;  // the time stamp. 
-	U16* name_;       // The name of this people      
-	U16* message_;    // real message
+	U64  ts_;		// the time stamp. 
+	U16* name_;     // The name of this people      
+	U16* message_;  // real message
 	U16* wrapTab_;
-	U8* obj_;         // point to GIF/APNG/Video/Pic etc
+	U8* obj_;       // point to GIF/APNG/Video/Pic etc
 } XChatMessage;
 
 // _TextWrapIdxTab[0] is the length of the elements behind it.
@@ -35,10 +35,10 @@ class XWindow4 : public XWindowT <XWindow4>
 {
 private:
 	enum {
-		GAP_TOP3 = 40,
-		GAP_BOTTOM3 = 10,
-		GAP_LEFT3 = 0,
-		GAP_RIGHT3 = 0,
+		GAP_TOP4 = 40,
+		GAP_BOTTOM4 = 10,
+		GAP_LEFT4 = 0,
+		GAP_RIGHT4 = 0,
 		GAP_MESSAGE = 20
 	};
 
@@ -213,7 +213,6 @@ public:
 			U16 charRemaining = characters;
 
 			wrapIdx = _TextWrapIdxTab + 1;
-
 			do
 			{
 				charBaseLen = 0;
