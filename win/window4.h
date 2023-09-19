@@ -23,7 +23,6 @@ typedef struct XChatMessage
 	U16* name_;       // The name of this people      
 	U16* message_;    // real message
 	U16* wrapTab_;
-	int  textLayoutWidth_;
 	U8* obj_;         // point to GIF/APNG/Video/Pic etc
 } XChatMessage;
 
@@ -123,7 +122,6 @@ public:
 				q->next_ = p;
 
 			q = p;
-			p->textLayoutWidth_ = 0;
 			p->icon_ = (0 == i % 2) ? (U32*)xbmpHeadGirl : (U32*)xbmpHeadMe;
 			p->w_ = p->h_ = 34;
 			p->state_ = i;
@@ -167,44 +165,29 @@ public:
 		XChatMessage* p = m_rootMessage;
 		
 		assert(w > 300);
-		W = DUI_ALIGN_DEFAULT32(w - 200) - 16;
+		W = DUI_ALIGN_DEFAULT32(w - 220);
 
-		m_sizeAll.cy = 0;
+		m_sizeAll.cy = GAP_MESSAGE;
 
 		while (nullptr != p)
 		{
-			if (0 == p->textLayoutWidth_)
-				p->textLayoutWidth_ = W;
-
-			if (nullptr == p->wrapTab_ || W != p->textLayoutWidth_)
-			{
-				p->width_ = TextLayout(W, p->message_, p->msgLen_);
+			p->width_ = TextLayout(W, p->message_, p->msgLen_);
 				
-				lines = _TextWrapIdxTab[0];
-				if (lines > 0)
+			lines = _TextWrapIdxTab[0];
+			if (lines > 0)
+			{
+				pfree(p->wrapTab_);
+				p->wrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * (lines + 1));
+				if (nullptr != p->wrapTab_)
 				{
-					pfree(p->wrapTab_);
-					p->wrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * (lines + 1));
-					if (nullptr == p->wrapTab_)
-					{
-						p = p->next_;
-						continue;
-					}
 					for (i = 0; i <= lines; i++)
 						p->wrapTab_[i] = _TextWrapIdxTab[i];
-				}
-				else
-				{
-					p = p->next_;
-					continue;
+
+					H = m_lineHeight0 * (lines + 1);
+					p->height_ = H + GAP_MESSAGE;
+					m_sizeAll.cy += p->height_;
 				}
 			}
-			assert(nullptr != p->wrapTab_);
-			lines = p->wrapTab_[0];
-			assert(lines > 0);
-			H = m_lineHeight0 * (lines + 1);
-			p->height_ = H + GAP_MESSAGE;
-			m_sizeAll.cy += p->height_;
 			p = p->next_;
 		}
 
@@ -314,9 +297,9 @@ public:
 		XChatMessage* p = m_rootMessage;
 
 		assert(w > 200);
-		W = DUI_ALIGN_DEFAULT32(w - 200);
+		W = DUI_ALIGN_DEFAULT32(w - 190);
 
-		pos = 0;
+		pos = GAP_MESSAGE;
 		while (nullptr != p)
 		{
 			H = p->height_;
@@ -339,7 +322,7 @@ public:
 					{
 						ctx.fillAll(bkcolor0);
 						dx = w - width - 60;
-						x = w - m_scrollWidth - p->w_;
+						x = w - m_scrollWidth - p->w_ - 6;
 					}
 					else // girl
 					{
@@ -358,7 +341,7 @@ public:
 						charNum = *m++;
 						gb.setUtf16Text(msg, charNum);
 						m_font0.shape(gb);
-						ctx.fillGlyphRun(BLPoint(5, y + 5), m_font0, gb.glyphRun(), textColor0);
+						ctx.fillGlyphRun(BLPoint(10, y + 5), m_font0, gb.glyphRun(), textColor0);
 						y += m_lineHeight0;
 						msg += charNum;
 					}
