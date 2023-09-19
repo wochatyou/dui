@@ -125,7 +125,7 @@ public:
 	{
 		int ret = 0;
 
-		BLResult blResult = m_font0.createFromFace(g_fontFace, 15.0f);
+		BLResult blResult = m_font0.createFromFace(g_fontFace, 16.0f);
 		if (BL_SUCCESS != blResult)
 			return (-1);
 
@@ -193,20 +193,20 @@ public:
 	int TextLayout(int width, U16* txt, U16 characters)
 	{
 		int w, MaxWidth = 0;
-		U16  charMaxIdx, charLen, charBaseIdx, i, idx;
+		U16  charMaxLen, charLen, charBaseIdx, i, idx;
 
 		assert(characters < MAX_INPUT_MESSAGE_LEN);
 		assert(characters > 0);
 
 		_TextWrapIdxTab[0] = 0; // clear the wrap table
 
-		charMaxIdx = characters - 1;
+		charMaxLen = characters;
 		charBaseIdx = 0;
 		for(i=0; i<characters; i++)  // we scan the whole string, maybe we find "\n", maybe not
 		{
 			if(0 == txt[i])  // it is a zero-terminated string
 			{
-				charMaxIdx = i-1;
+				charMaxLen = i;
 				break;
 			}
 
@@ -230,11 +230,14 @@ public:
 			}
 		}
 
-		if(charBaseIdx < charMaxIdx) // we still have characters after the last "\n"
+		if(charMaxLen > 0)
 		{
-			w = TextLayoutOneLine(width, txt, charBaseIdx, (charMaxIdx - charBaseIdx + 1));
-			if(MaxWidth < w)
-				MaxWidth = w;
+			if(charBaseIdx < charMaxLen-1) // we still have characters after the last "\n"
+			{
+				w = TextLayoutOneLine(width, txt, charBaseIdx, (charMaxLen - charBaseIdx));
+				if(MaxWidth < w)
+					MaxWidth = w;
+			}
 		}
 
 		return MaxWidth;
