@@ -178,7 +178,8 @@ enum
 {
     DEFAULT_BORDER_COLOR        = 0xFFBBBBBB,
     DEFAULT_SCROLLBKG_COLOR     = 0xFFF9F3F1,
-    DEFAULT_SCROLLTHUMB_COLOR   = 0xFFB9B4B2
+    DEFAULT_SCROLLTHUMB_COLOR   = 0xFFC0C1C4,
+    DEFAULT_SCROLLTHUMB_COLORA  = 0xFFAAABAD
 };
 
 
@@ -740,17 +741,24 @@ public:
             if (XWinPointInRect(xPos, yPos, &m_area)) // the mosue is in this area
             {
                 int hit = -1;  // no hit so far
+
                 if (DUI_PROP_HASVSCROLL & m_property) // handle the vertical bar
                 {
-                    U8 status = m_status;  // save previous state
+                    U32 status = m_status;  // save previous state
                     m_status &= (~DUI_STATUS_VSCROLL);
 
                     assert(m_area.right > m_scrollWidth);
                     
-                    if (xPos >= (m_area.right - m_scrollWidth))
+                    if (m_sizeAll.cy > h) // the virutal window size is bigger than the real window size
                     {
-                        if (m_sizeAll.cy > h) // the virutal window size is bigger than the real window size
-                            m_status |= DUI_STATUS_VSCROLL;
+                        U32 thumbColor = m_thumbColor;
+                        m_status |= DUI_STATUS_VSCROLL;
+                        m_thumbColor = DEFAULT_SCROLLTHUMB_COLOR;
+                        if(xPos >= (m_area.right - m_scrollWidth))
+                            m_thumbColor = DEFAULT_SCROLLTHUMB_COLORA;
+
+                        if(thumbColor != m_thumbColor)
+                            r0 = DUI_STATUS_NEEDRAW;
                     }
 
                     if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
@@ -863,11 +871,11 @@ public:
             // handle the vertical bar
             if (DUI_PROP_HASVSCROLL & m_property)
             {
-                U8 status = m_status;
-                m_status &= (~DUI_STATUS_VSCROLL);
-
                 if (xPos >= (m_area.right - m_scrollWidth))
                 {
+                    U32 status = m_status;
+                    m_status &= (~DUI_STATUS_VSCROLL);
+
                     if (m_sizeAll.cy > h)
                     {
                         int thumb_start = (m_ptOffset.y * h) / m_sizeAll.cy;
@@ -904,9 +912,9 @@ public:
                         return DUI_STATUS_NEEDRAW;
                     }
 
+                    if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
+                        r0 = DUI_STATUS_NEEDRAW;
                 }
-                if ((DUI_STATUS_VSCROLL & status) != (DUI_STATUS_VSCROLL & m_status))
-                    r0 = DUI_STATUS_NEEDRAW;
             }
             else if (DUI_PROP_HASHSCROLL & m_property) // handle the horizonal bar
             {
