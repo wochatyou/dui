@@ -73,14 +73,14 @@ private:
 
 public:
 	XEditBox m_editBox;
-	bool m_IsInEditArea = false;
 	HCURSOR m_hCursorIBeam = nullptr;
+
 	XWindow5()
 	{
 		m_backgroundColor = 0xFFFFFFFF;
 		m_buttonStartIdx = XWIN5_BUTTON_EMOJI;
 		m_buttonEndIdx = XWIN5_BUTTON_HINT;
-		m_property |= DUI_PROP_MOVEWIN;
+		m_property |= (DUI_PROP_MOVEWIN | DUI_PROP_HANDLETIMER);
 		m_message = WM_WIN5_MESSAGE;
 
 		InitButtons();
@@ -277,6 +277,9 @@ public:
 		m_editBox.bottom = ((top1 < top0) ? top1 : top0) - 4;
 		m_editBox.left = 0;
 		m_editBox.right = w;
+
+		U32 size = (U32)((m_editBox.right - m_editBox.left) * (m_editBox.bottom - m_editBox.top));
+		m_editBox.AttachScreenBuffer(m_screen + m_editBox.top * w, size);
 	}
 
 
@@ -305,14 +308,7 @@ public:
 
 		if (nullptr != m_screen)
 		{
-			int size;
-			r.left = m_editBox.left;
-			r.top = m_editBox.top;
-			r.right = m_editBox.right;
-			r.bottom = m_editBox.bottom;
-			editScreenBuff = m_screen + r.top * w;
-			size = (r.right - r.left) * (r.bottom - r.top);
-			ScreenClear(editScreenBuff, (U32)size, 0xFFF7F7F7);
+			m_editBox.Draw();
 		}
 
 		return 0;
@@ -353,12 +349,13 @@ public:
 
 	int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		if (DUI_STATUS_ISFOCUS & m_status)
+		int r = DUI_STATUS_NODRAW;
+		if(m_editBox.IsFocused())
 		{
-			m_status &= ~DUI_STATUS_ISFOCUS;
-			return 1;
+			r = DUI_STATUS_NEEDRAW;
 		}
-		return 0;
+
+		return r;
 	}
 
 	int DoMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) 
@@ -367,23 +364,71 @@ public:
 		int r1 = DUI_STATUS_NODRAW;
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
-		XRECT r;
+
 		// transfer the coordination from real window to local virutal window
 		xPos -= m_area.left;
 		yPos -= m_area.top;
 
-		r.left   = m_editBox.left;
-		r.top    = m_editBox.top;
-		r.right  = m_editBox.right;
-		r.bottom = m_editBox.bottom;
-
-		if (XWinPointInRect(xPos, yPos, &r))
+		if (XWinPointInRect(xPos, yPos, &m_editBox))
 		{
 			::SetCursor(m_hCursorIBeam);
 		}
 
 		return 0; 
 	}
+	
+	int DoSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr)
+	{ 
+		xPos -= m_area.left;
+		yPos -= m_area.top;
+
+		if (XWinPointInRect(xPos, yPos, &m_editBox))
+		{
+			return 1;
+		}
+
+		return 0; 
+	}
+
+	int DoLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) 
+	{ 
+		int r = DUI_STATUS_NODRAW;
+		return r; 
+	}
+
+    int DoFocusGet(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) 
+    { 
+    	int r = DUI_STATUS_NODRAW;
+
+		xPos -= m_area.left;
+		yPos -= m_area.top;
+
+		bool isFocused = m_editBox.IsFocused();
+		m_editBox.ClearFocusedStatus();
+
+		if (XWinPointInRect(xPos, yPos, &m_editBox))
+		{
+			assert(DUI_STATUS_ISFOCUS & m_status);
+			m_editBox.SetFocusedStatus();
+	    	if(!isFocused)
+	    		r = DUI_STATUS_NEEDRAW;
+		}
+
+    	return r; 
+    }
+
+    int DoFocusLose(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) 
+    { 
+    	int r = DUI_STATUS_NODRAW;
+    	bool isFocused = m_editBox.IsFocused();
+    	
+    	m_editBox.ClearFocusedStatus();
+    	if(isFocused)
+    		r = DUI_STATUS_NEEDRAW;
+
+    	return r; 
+    } 
+
 };
 
 #endif  /* __WOCHAT_WINDOWS5_H__ */

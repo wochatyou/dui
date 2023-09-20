@@ -142,7 +142,9 @@ typedef struct XButton
 
 enum
 {
-    XEDIT_STATUS_CARET  = 0x0001
+    XEDIT_STATUS_NONE   = 0x00,
+    XEDIT_STATUS_FOCUS  = 0x01,
+    XEDIT_STATUS_CARET  = 0x02
 };
 
 class XEditBox
@@ -152,9 +154,73 @@ public:
     int top;
     int right;
     int bottom;
-    U16 m_status;
-    U32 m_backgroundColor;
-    U16 m_text[DUI_MAX_EDITSTRING] = { 0 };
+    int _cursorX;
+    int _cursorY;
+    int _cursorW;
+    int _cursorH;
+    U32 _cursorColor;
+    U32 _status;
+    U32 _backgroundColor;
+    U16 _text[DUI_MAX_EDITSTRING] = { 0 };
+    U32* _buffer;
+    U32  _size;
+
+    XEditBox()
+    {
+        _status = XEDIT_STATUS_NONE;
+        _cursorX = _cursorY = 4;
+        _cursorW = 1;
+        _cursorH = 22;
+        _buffer = nullptr;
+        _size = 0;
+        _backgroundColor = 0xFFFFFFFF;
+        _cursorColor = 0xFF000000;
+    }
+
+    bool IsFocused()
+    {
+        return (_status & XEDIT_STATUS_FOCUS);
+    }
+
+    void ClearFocusedStatus()
+    {
+        _status &= ~XEDIT_STATUS_FOCUS;
+    }
+
+    void SetFocusedStatus()
+    {
+        _status |= XEDIT_STATUS_FOCUS;
+    }
+
+    void AttachScreenBuffer(U32* buf, U32 size)
+    {
+        _buffer = buf;
+        _size = size;
+    }
+
+    int Draw()
+    {
+        if(0 == (_status & XEDIT_STATUS_FOCUS))
+            return 0;
+
+        ScreenClear(_buffer, _size, _backgroundColor);
+        
+        if(XEDIT_STATUS_CARET & _status)
+        {
+            _status &= ~XEDIT_STATUS_CARET;
+        }
+        else
+        {
+            _status |= XEDIT_STATUS_CARET;
+        }
+
+        if(XEDIT_STATUS_CARET & _status)
+        {
+            ScreenFillRect(_buffer, right - left, bottom - top, _cursorColor, _cursorW, _cursorH, _cursorX, _cursorY);
+        }
+
+        return 0;
+    }
 };
 
 enum
@@ -426,53 +492,6 @@ public:
         return bRet;
     }
 
-#if 0
-    void DrawButton(U32* dst, int w, int h, XButton* button)
-    {
-        U32* src;
-        int dx = button->left;
-        int dy = button->top;
-
-        assert(nullptr != dst);
-        assert(nullptr != button);
-
-        if (XBUTTON_STATE_HIDDEN != button->state) // this button is visible
-        {
-
-            XBitmap* bitmap = imgNormal;
-            switch (button->state)
-            {
-            case XBUTTON_STATE_PRESSED:
-                bitmap = button->imgPress;
-                break;
-            case XBUTTON_STATE_HOVERED:
-                bitmap = button->imgHover;
-                break;
-            case XBUTTON_STATE_ACTIVE:
-                bitmap = button->imgActive;
-                break;
-            default:
-                break;
-            }
-
-            assert(nullptr != bitmap);
-
-            src = bitmap->data;
-
-            assert(nullptr != src);
-
-            if (XBUTTON_PROP_ROUND & button->property)
-            {
-                ScreenDrawRectRound(dst, w, h, src, bitmap->w, bitmap->h, dx, dy, m_backgroundColor);
-            }
-            else
-            {
-                ScreenDrawRect(dst, w, h, src, bitmap->w, bitmap->h, dx, dy);
-            }
-        }
-    }
-#endif
-
     void DrawButton(XButton* button)
     {
         U32* dst;
@@ -643,13 +662,16 @@ public:
     int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
     int OnTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
     {
+        int r = DUI_STATUS_NODRAW;
         if(DUI_PROP_HANDLETIMER & m_status)
         {
             T* pT = static_cast<T*>(this);
-            pT->DoTimer(uMsg, wParam, lParam, lpData);
+            r = pT->DoTimer(uMsg, wParam, lParam, lpData);
+            if(DUI_STATUS_NODRAW != r)
+                m_status |= DUI_STATUS_NEEDRAW;
         }
 
-        return 0;
+        return r;
     }
 
     int DoMouseWheel(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
@@ -836,9 +858,13 @@ public:
         return DUI_STATUS_NODRAW;
     }
 
+    int DoFocusGet(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
+    int DoFocusLose(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; } 
+
     int DoLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
     int OnLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
     {
+        int rx = DUI_STATUS_NODRAW;
         int r0 = DUI_STATUS_NODRAW;
         int r1 = DUI_STATUS_NODRAW;
 
@@ -871,6 +897,9 @@ public:
 
             // the mouse click my area, so I have the focus
             m_status |= DUI_STATUS_ISFOCUS; 
+            
+            T* pT = static_cast<T*>(this);
+            rx = pT->DoFocusGet(uMsg, xPos, yPos, lpData);
 
             // handle the vertical bar
             if (DUI_PROP_HASVSCROLL & m_property)
@@ -959,6 +988,8 @@ public:
         else
         {
             m_status &= ~DUI_STATUS_ISFOCUS; // this window lose focus
+            T* pT = static_cast<T*>(this);
+            rx = pT->DoFocusLose(uMsg, xPos, yPos, lpData);
         }
 
         // if the state is not equal to the previous state, we need to redraw it
@@ -977,7 +1008,7 @@ public:
             r1 = pT->DoLButtonDown(uMsg, wParam, lParam, lpData);
         }
 
-        if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1)
+        if (DUI_STATUS_NODRAW != r0 || DUI_STATUS_NODRAW != r1 || DUI_STATUS_NODRAW != rx)
         {
             m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
             return DUI_STATUS_NEEDRAW;
@@ -1124,6 +1155,14 @@ public:
     {
         T* pT = static_cast<T*>(this);
         int ret = pT->DoDestroy(uMsg, wParam, lParam, lpData);
+        return ret;
+    }
+
+    int DoSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
+    int OnSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr)
+    {
+        T* pT = static_cast<T*>(this);
+        int ret = pT->DoSetCursor(uMsg, xPos, yPos, lpData);
         return ret;
     }
 

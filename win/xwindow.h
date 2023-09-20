@@ -156,7 +156,7 @@ public:
 		MESSAGE_HANDLER(WM_KEYDOWN, OnKeyDown)
 		MESSAGE_HANDLER(WM_GETMINMAXINFO, OnGetMinMaxInfo)
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
-		//MESSAGE_HANDLER(WM_SETCURSOR, OnSetCursor)
+		MESSAGE_HANDLER(WM_SETCURSOR, OnSetCursor)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_MOUSEACTIVATE, OnMouseActivate)
 		MESSAGE_HANDLER(WM_SETTINGCHANGE, OnSettingChange)
@@ -242,6 +242,9 @@ public:
 		int r4 = m_win4.OnTimer(uMsg, wParam, lParam);
 		int r5 = m_win5.OnTimer(uMsg, wParam, lParam);
 
+		if(r0 || r1 || r2 || r3 || r4 || r5)
+			Invalidate();
+
 		return 0;
 	}
 
@@ -255,18 +258,31 @@ public:
 		return 0;
 	}
 
-	LRESULT OnSetCursor(UINT /*uMsg*/, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	LRESULT OnSetCursor(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-#if 0
+		bHandled = FALSE;
 		if(((HWND)wParam == m_hWnd) && (LOWORD(lParam) == HTCLIENT))
 		{
 			DWORD dwPos = ::GetMessagePos();
+
 			POINT ptPos = { GET_X_LPARAM(dwPos), GET_Y_LPARAM(dwPos) };
+
 			ScreenToClient(&ptPos);
-			if(IsOverSplitterBar(ptPos.x, ptPos.y))
-				return 1;
+
+			DrapMode mode = IsOverSplitterBar(ptPos.x, ptPos.y);
+			if(DrapMode::dragModeNone != mode)
+				bHandled = TRUE;
+			else
+			{
+				int r1 = m_win1.OnSetCursor(uMsg, ptPos.x, ptPos.y);
+				int r4 = m_win4.OnSetCursor(uMsg, ptPos.x, ptPos.y);
+				int r5 = m_win5.OnSetCursor(uMsg, ptPos.x, ptPos.y);
+
+				if(r1 || r4 || r5)
+					bHandled = TRUE;
+			}
 		}
-#endif
+		
 		return 0;
 	}
 
