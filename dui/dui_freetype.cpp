@@ -1,3 +1,5 @@
+#if 0
+
 // dear imgui: FreeType font builder (used as a replacement for the stb_truetype builder)
 // (code)
 
@@ -936,4 +938,6 @@ static FT_Error ImGuiLunasvgPortPresetSlot(FT_GlyphSlot slot, FT_Bool cache, FT_
 
 #ifdef _MSC_VER
 #pragma warning (pop)
+#endif
+
 #endif

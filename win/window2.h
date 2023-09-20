@@ -215,7 +215,7 @@ public:
 					ScreenFillRect(m_screen, w, h, color, w - margin, ITEM_HEIGHT, 0, pos - m_ptOffset.y);
 
 					dy = pos - m_ptOffset.y + ITEM_MARGIN;
-					ScreenDrawRectRound(m_screen, w, h, p->icon_, p->w_, p->h_, dx, dy, color);
+					ScreenDrawRectRound(m_screen, w, h, p->icon_, p->w_, p->h_, dx, dy, color, color);
 
 					if (nullptr != p->name_)
 					{

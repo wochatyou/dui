@@ -2014,6 +2014,7 @@ AllocSetFree(void* pointer)
 static void*
 AllocSetRealloc(void* pointer, Size size)
 {
+#if 0
 	AllocBlock	block;
 	AllocSet	set;
 	MemoryChunk* chunk = PointerGetMemoryChunk(pointer);
@@ -2269,6 +2270,8 @@ AllocSetRealloc(void* pointer, Size size)
 
 		return newPointer;
 	}
+#endif
+	return NULL;
 }
 
 /*

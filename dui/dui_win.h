@@ -14,6 +14,8 @@
 #define U32     uint32_t
 #define U64     uint64_t
 
+#define DUI_DEBUG	1
+
 /* DUI_ALIGN() is only to be used to align on a power of 2 boundary */
 #define DUI_ALIGN(size, boundary) (((size) + ((boundary) -1)) & ~((boundary) - 1))
 #define DUI_ALIGN_DEFAULT32(size)   DUI_ALIGN(size, 4)
@@ -29,7 +31,7 @@ int ScreenDrawRect(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, i
 
 int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy);
 
-int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color);
+int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color0, uint32_t color1);
 
 int ScreenFillRectRound(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy, uint32_t c1, uint32_t c2);
 
@@ -507,7 +509,7 @@ public:
 
             if (XBUTTON_PROP_ROUND & button->property)
             {
-                ScreenDrawRectRound(dst, w, h, src, bitmap->w, bitmap->h, dx, dy, m_backgroundColor);
+                ScreenDrawRectRound(dst, w, h, src, bitmap->w, bitmap->h, dx, dy, m_backgroundColor, m_backgroundColor);
             }
             else
             {
@@ -580,9 +582,7 @@ public:
 
                 // Draw the vertical scroll bar
                 ScreenFillRect(m_screen, w, h, m_scrollbarColor, m_scrollWidth, h, w - m_scrollWidth, 0);
-                ScreenFillRectRound(m_screen, w, h, m_thumbColor, thumb_width, thumb_height, w - m_scrollWidth + 1, thumb_start
-                    ,0xFFD6D3D2
-                    ,m_scrollbarColor);
+                ScreenFillRectRound(m_screen, w, h, m_thumbColor, thumb_width, thumb_height, w - m_scrollWidth + 1, thumb_start, m_scrollbarColor, 0xFFD6D3D2);
             }
 
             for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)

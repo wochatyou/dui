@@ -1,4 +1,5 @@
-#include "dui.h"
+#include <stdint.h>
+#include <assert.h>
 
 /* fill the whole screen with one color */
 int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color)
@@ -56,12 +57,16 @@ int ScreenDrawRect(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, i
 	return 0;
 }
 
-int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color)
+int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color0, uint32_t color1)
 {
 	uint32_t* startDST;
 	uint32_t* startSRC;
+	uint32_t* p;
 	int SW, SH;
-	int normal = 1;
+	int normalLT, normalRT, normalLB, normalRB;
+	
+	assert(dx > 0);
+	normalLT = normalRT = normalLB = normalRB = 1;
 
 	if (dx >= w || dy >= h) // not in the scope
 		return 0;
@@ -71,7 +76,9 @@ int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int 
 		src += ((-dy) * sw);
 		sh += dy;
 		dy = 0;
-		normal = 0;
+		normalLT = normalRT = 0;
+		if (sh < 0)
+			return 0;
 	}
 
 	SW = sw;
@@ -80,12 +87,12 @@ int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int 
 	if (sw + dx > w)
 	{
 		SW = w - dx;
-		normal = 0;
+		normalRT = normalRB = 0;
 	}
 	if (sh + dy > h)
 	{
 		SH = h - dy;
-		normal = 0;
+		normalLB = normalRB = 0;
 	}
 
 	for (int i = 0; i < SH; i++)
@@ -96,29 +103,40 @@ int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int 
 			*startDST++ = *startSRC++;
 	}
 
-	if (0 != normal)
+	if (normalLT)
 	{
-		uint32_t* p = dst + w * dy + dx;
-		*p = color; *(p + 1) = color;
-		p += (sw - 2);
-		*p++ = color; *p = color;
-		p = dst + w * (dy + 1) + dx;
-		*p = color;
-		p += (sw - 1);
-		*p = color;
-
+		p = dst + w * dy + dx;
+		*p = color0; *(p + 1) = color1;
+		p += w;
+		*p = color1;
+	}
+	if (normalRT)
+	{
+		p = dst + w * dy + dx + (sw - 2);
+		*p++ = color1; *p = color0;
+		p += w;
+		*p = color1;
+	}
+	if (normalLB)
+	{
 		p = dst + w * (dy + sh - 2) + dx;
-		*p = color;
-		p += (sw - 1);
-		*p = color;
-		p = dst + w * (dy + sh - 1) + dx;
-		*p = color; *(p + 1) = color;
-		p += (sw - 2);
-		*p++ = color; *p = color;
+		*p = color1;
+		p += w;
+		*p++ = color0;
+		*p = color1;
+	}
+	if (normalRB)
+	{
+		p = dst + w * (dy + sh - 2) + dx + (sw - 1);
+		*p = color1;
+		p += w;
+		*p = color0;
+		*(p - 1) = color1;
 	}
 
 	return 0;
 }
+
 
 int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy)
 {
@@ -156,15 +174,35 @@ int ScreenFillRectRound(uint32_t* dst, int w, int h, uint32_t color, int sw, int
 {
 	uint32_t* startDST;
 	uint32_t* p;
+	int normalLT, normalRT, normalLB, normalRB;
 	int SW = sw;
 	int SH = sh;
 
+	assert(dx > 0);
+	normalLT = normalRT = normalLB = normalRB = 1;
+
 	if (dx >= w || dy >= h) // not in the scope
 		return 0;
+
+	if (dy < 0)
+	{
+		sh += dy;
+		dy = 0;
+		normalLT = normalRT = 0;
+		if (sh < 0)
+			return 0;
+	}
+
 	if (sw + dx > w)
+	{
+		normalRT = normalRB = 0;
 		SW = w - dx;
+	}
 	if (sh + dy > h)
+	{
+		normalLB = normalRB = 0;
 		SH = h - dy;
+	}
 
 	for (int i = 0; i < SH; i++)
 	{
@@ -172,23 +210,37 @@ int ScreenFillRectRound(uint32_t* dst, int w, int h, uint32_t color, int sw, int
 		for (int k = 0; k < SW; k++)
 			*startDST++ = color;
 	}
-	// Fix the round coner
-	startDST = dst + w * dy + dx;
-	p = startDST;
-	*p++ = c2; *p = c1;
-	p = startDST + sw - 2;
-	*p++ = c1; *p++ = c2;
-	p = startDST + w; *p = c1;
-	p += sw - 1; *p = c1;
 
-	p = startDST + w * (sh - 2);
-	*p = c1;
-	p += sw - 1; *p = c1;
-
-	p = startDST + w * (sh - 1);
-	*p++ = c2; *p = c1;
-	p += (sw - 3);
-	*p++ = c1; *p = c2;
+	if (normalLT)
+	{
+		p = dst + w * dy + dx;
+		*p = c1; *(p + 1) = c2;
+		p += w;
+		*p = c2;
+	}
+	if (normalRT)
+	{
+		p = dst + w * dy + dx + (sw - 2);
+		*p++ = c2; *p = c1;
+		p += w;
+		*p = c2;
+	}
+	if (normalLB)
+	{
+		p = dst + w * (dy + sh - 2) + dx;
+		*p = c2;
+		p += w;
+		*p++ = c1;
+		*p = c2;
+	}
+	if (normalRB)
+	{
+		p = dst + w * (dy + sh - 2) + dx + (sw - 1);
+		*p = c2;
+		p += w;
+		*p = c1;
+		*(p - 1) = c2;
+	}
 
 	return 0;
 }

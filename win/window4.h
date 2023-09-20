@@ -32,7 +32,17 @@ typedef struct XChatMessage
 
 // _TextWrapIdxTab[0] is the length of the elements behind it.
 // The first two bytes are the lines parsered. Each element has two parts: 2-byte string base index, and 2-byte string length
-static U16 _TextWrapIdxTab[MAX_INPUT_MESSAGE_LEN];
+// 
+//        The line number
+//          | 
+//          V
+//         [X][B][L][B][L][B][L][B][L][B][L][B][L][B][L][B][L][B][L][B][L][B][L].......
+//             ^  ^                    ^  ^
+//             |  |                    |  |
+// base of line 1 |                   line 5  
+//   character number of line 1
+//
+static U16 _TextWrapIdxTab[MAX_INPUT_MESSAGE_LEN + 1];
 
 class XWindow4 : public XWindowT <XWindow4>
 {
@@ -158,7 +168,7 @@ public:
 
 		while (nullptr != p)
 		{
-			p->width_ = TextLayout(W, p->message_, p->msgLen_);
+			p->width_ = 18 + TextLayout(W, p->message_, p->msgLen_);
 				
 			lines = _TextWrapIdxTab[0];
 			if (lines > 0)
@@ -188,8 +198,6 @@ public:
 		return 0;
 	}
 
-#define DUI_DEBUG	1
-
 	int TextLayout(int width, U16* txt, U16 characters)
 	{
 		int w, MaxWidth = 0;
@@ -202,7 +210,8 @@ public:
 
 		charMaxLen = characters;
 		charBaseIdx = 0;
-		for(i=0; i<characters; i++)  // we scan the whole string, maybe we find "\n", maybe not
+		// we scan the whole string, maybe we can find "\n", maybe not
+		for(i=0; i<characters; i++)  
 		{
 			if(0 == txt[i])  // it is a zero-terminated string
 			{
@@ -232,7 +241,7 @@ public:
 
 		if(charMaxLen > 0)
 		{
-			if(charBaseIdx < charMaxLen-1) // we still have characters after the last "\n"
+			if(charBaseIdx <= charMaxLen-1) // we still have characters after the last "\n"
 			{
 				w = TextLayoutOneLine(width, txt, charBaseIdx, (charMaxLen - charBaseIdx));
 				if(MaxWidth < w)
@@ -354,13 +363,14 @@ public:
 		U16 i, lines, baseIdx, charNum;
 		U16* m;
 		U16* msg;
+		U32 color1;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
-
+		
 		BLResult blResult;
 		BLRgba32 bkcolor0(0xFF6AEA9Eu);
 		BLRgba32 bkcolor1(0xFFFFFFFFu);
-		BLRgba32 textColor0(0xFF333333u);
+		BLRgba32 textColor0(0xFF232323u);
 		BLImageData imgdata = { 0 };
 		BLGlyphBuffer gb;
 
@@ -380,8 +390,8 @@ public:
 			{
 				BLImage img;
 				width = W;
-				if(p->width_ < W - 16)
-					width = DUI_ALIGN_DEFAULT32(p->width_ + 16);
+				if(p->width_ < W)
+					width = DUI_ALIGN_DEFAULT32(p->width_);
 
 				blResult = img.create(width, H - GAP_MESSAGE, BL_FORMAT_PRGB32);
 
@@ -423,8 +433,11 @@ public:
 					if (BL_SUCCESS == blResult)
 					{
 						assert(nullptr != p->icon_);
-						ScreenDrawRectRound(m_screen, w, h, (U32*)p->icon_, p->w_, p->h_, x, pos - m_ptOffset.y, m_backgroundColor);
-						ScreenDrawRectRound(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, dx, pos - m_ptOffset.y, m_backgroundColor);
+						ScreenDrawRectRound(m_screen, w, h, (U32*)p->icon_, p->w_, p->h_, x, pos - m_ptOffset.y, m_backgroundColor, m_backgroundColor);
+
+						color1 = (dx > 60) ? 0xFFA9EFC5 : m_backgroundColor;
+						ScreenDrawRectRound(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, dx, pos - m_ptOffset.y, m_backgroundColor, color1);
+
 						if (p->state_ % 2)
 							ScreenDrawRect(m_screen, w, h, (U32*)littleArrowMe, 4, 8, dx + imgdata.size.w, pos - m_ptOffset.y + 13);
 						

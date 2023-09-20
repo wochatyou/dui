@@ -1,3 +1,4 @@
+#if 0
 #ifndef _DUI_FREETYPE_H_
 #define _DUI_FREETYPE_H_
 
@@ -50,3 +51,4 @@ namespace ImGuiFreeType
 }
 
 #endif // _DUI_FREETYPE_H_
+#endif
