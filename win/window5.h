@@ -13,6 +13,7 @@ enum {
 	, XWIN5_BUTTON_LIVESTREAM
 	, XWIN5_BUTTON_VIDEOCALL
 	, XWIN5_BUTTON_SENDMESSAGE
+	, XWIN5_BUTTON_HINT
 };
 
 class XWindow5 : public XWindowT <XWindow5>
@@ -63,6 +64,11 @@ private:
 		, XWIN5_BITMAP_SENDMESSAGEP			// Press
 		, XWIN5_BITMAP_SENDMESSAGEA			// Active
 
+		, XWIN5_BITMAP_HINTN				// Normal			
+		, XWIN5_BITMAP_HINTH				// Hover
+		, XWIN5_BITMAP_HINTP				// Press
+		, XWIN5_BITMAP_HINTA				// Active
+
 	};
 
 public:
@@ -70,7 +76,7 @@ public:
 	{
 		m_backgroundColor = 0xFFFFFFFF;
 		m_buttonStartIdx = XWIN5_BUTTON_EMOJI;
-		m_buttonEndIdx = XWIN5_BUTTON_SENDMESSAGE;
+		m_buttonEndIdx = XWIN5_BUTTON_HINT;
 		m_property |= DUI_PROP_MOVEWIN;
 		m_message = WM_WIN5_MESSAGE;
 
@@ -132,6 +138,12 @@ public:
 		id = XWIN5_BITMAP_SENDMESSAGEH; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpSendMessageH; bmp->w = w; bmp->h = h;
 		id = XWIN5_BITMAP_SENDMESSAGEP; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpSendMessageP; bmp->w = w; bmp->h = h;
 		id = XWIN5_BITMAP_SENDMESSAGEA; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpSendMessageH; bmp->w = w; bmp->h = h;
+
+		w = 145; h = 16;
+		id = XWIN5_BITMAP_HINTN; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
+		id = XWIN5_BITMAP_HINTH; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
+		id = XWIN5_BITMAP_HINTP; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
+		id = XWIN5_BITMAP_HINTA; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
 	}
 
 
@@ -193,7 +205,7 @@ public:
 		button->right = button->left + bitmap->w;
 		button->bottom = button->top + bitmap->h;
 
-		// the below 3 buttons have dynamtic position which will be determined later
+		// the below 4 buttons have dynamtic position which will be determined later
 		id = XWIN5_BUTTON_LIVESTREAM; button = &m_button[id]; button->id = id;
 		bitmap = &m_bitmap[XWIN5_BITMAP_LIVESTREAMN];  button->imgNormal = bitmap;
 		bitmap = &m_bitmap[XWIN5_BITMAP_LIVESTREAMH]; button->imgHover = bitmap;
@@ -212,6 +224,13 @@ public:
 		bitmap = &m_bitmap[XWIN5_BITMAP_SENDMESSAGEP]; button->imgPress = bitmap;
 		bitmap = &m_bitmap[XWIN5_BITMAP_SENDMESSAGEA]; button->imgActive = bitmap;
 
+		id = XWIN5_BUTTON_HINT; button = &m_button[id]; button->id = id;
+		button->property |= XBUTTON_PROP_STATIC;
+		bitmap = &m_bitmap[XWIN5_BITMAP_HINTN]; button->imgNormal = bitmap;
+		bitmap = &m_bitmap[XWIN5_BITMAP_HINTH]; button->imgHover = bitmap;
+		bitmap = &m_bitmap[XWIN5_BITMAP_HINTP]; button->imgPress = bitmap;
+		bitmap = &m_bitmap[XWIN5_BITMAP_HINTA]; button->imgActive = bitmap;
+
 		return 0;
 	}
 
@@ -224,6 +243,12 @@ public:
 		XBitmap* bmp;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
+
+		id = XWIN5_BUTTON_HINT;  button = &m_button[id]; bmp = button->imgNormal;
+		button->left = 10;
+		button->bottom = h - 10;
+		button->right = button->left + bmp->w;
+		button->top = button->bottom - bmp->h;
 
 		id = XWIN5_BUTTON_SENDMESSAGE;  button = &m_button[id]; bmp = button->imgNormal;
 		button->right = w - 5;
