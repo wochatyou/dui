@@ -148,6 +148,10 @@ enum
 class XEditBox
 {
 public:
+    int left;
+    int top;
+    int right;
+    int bottom;
     U16 m_status;
     U32 m_backgroundColor;
     U16 m_text[DUI_MAX_EDITSTRING] = { 0 };

@@ -72,6 +72,9 @@ private:
 	};
 
 public:
+	XEditBox m_editBox;
+	bool m_IsInEditArea = false;
+	HCURSOR m_hCursorIBeam = nullptr;
 	XWindow5()
 	{
 		m_backgroundColor = 0xFFFFFFFF;
@@ -145,7 +148,6 @@ public:
 		id = XWIN5_BITMAP_HINTP; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
 		id = XWIN5_BITMAP_HINTA; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
 	}
-
 
 	int InitButtons()
 	{
@@ -244,6 +246,12 @@ public:
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 
+		id = XWIN5_BUTTON_EMOJI; button = &m_button[id];
+		m_editBox.left = 0;
+		m_editBox.right = w;
+		m_editBox.top = button->bottom + 4;
+		m_editBox.bottom = h - 32;
+
 		id = XWIN5_BUTTON_HINT;  button = &m_button[id]; bmp = button->imgNormal;
 		button->left = 10;
 		button->bottom = h - 10;
@@ -312,6 +320,9 @@ public:
 		if (false == CreateEditWindow())
 			return (-1);
 
+		m_hCursorIBeam = ::LoadCursor(NULL, IDC_HELP);
+		if (nullptr == m_hCursorIBeam)
+			return (-2);
 		return 0;
 	}
 
@@ -330,6 +341,30 @@ public:
 			return 1;
 		}
 		return 0;
+	}
+
+	int DoMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) 
+	{ 
+		int r0 = DUI_STATUS_NODRAW;
+		int r1 = DUI_STATUS_NODRAW;
+		int xPos = GET_X_LPARAM(lParam);
+		int yPos = GET_Y_LPARAM(lParam);
+		XRECT r;
+		// transfer the coordination from real window to local virutal window
+		xPos -= m_area.left;
+		yPos -= m_area.top;
+
+		r.left   = m_editBox.left;
+		r.top    = m_editBox.top;
+		r.right  = m_editBox.right;
+		r.bottom = m_editBox.bottom;
+
+		if (XWinPointInRect(xPos, yPos, &r))
+		{
+			SetCursor(m_hCursorIBeam);
+		}
+
+		return 0; 
 	}
 };
 
