@@ -273,6 +273,8 @@ public:
 	LRESULT OnSize(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
 		U16 W, H;
+		RECT area;
+		RECT* r = &area;
 
 		if (SIZE_MINIMIZED == wParam)
 			return 0;
@@ -372,8 +374,6 @@ public:
 		{
 			U32* dst = m_screenBuff;
 			U32 size;
-			RECT area;
-			RECT* r =&area;
 
 			r->left = m_rectClient.left;
 			r->right = XWIN0_WIDTH;
@@ -423,6 +423,10 @@ public:
 		}
 
 		Invalidate();
+		//r->left = 1; r->top = 2, r->right = 3; r->bottom = 4;
+		//InvalidateRect(r);
+		//UpdateWindow();
+		//r->left = 11; r->top = 22, r->right = 33; r->bottom = 44;
 
 		return 0;
 	}

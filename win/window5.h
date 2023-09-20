@@ -238,7 +238,7 @@ public:
 
 	void UpdateButtonPosition()
 	{
-		int id;
+		int id, top0, top1;
 		int gap = 10; // pixel
 		XButton* button;
 		XButton* buttonPrev;
@@ -246,23 +246,19 @@ public:
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 
-		id = XWIN5_BUTTON_EMOJI; button = &m_button[id];
-		m_editBox.left = 0;
-		m_editBox.right = w;
-		m_editBox.top = button->bottom + 4;
-		m_editBox.bottom = h - 32;
-
 		id = XWIN5_BUTTON_HINT;  button = &m_button[id]; bmp = button->imgNormal;
 		button->left = 10;
 		button->bottom = h - 10;
 		button->right = button->left + bmp->w;
 		button->top = button->bottom - bmp->h;
+		top0 = button->top;
 
 		id = XWIN5_BUTTON_SENDMESSAGE;  button = &m_button[id]; bmp = button->imgNormal;
 		button->right = w - 5;
 		button->bottom = h - 5;
 		button->left = button->right - bmp->w;
 		button->top = button->bottom - bmp->h;
+		top1 = button->top;
 
 		id = XWIN5_BUTTON_VIDEOCALL;  button = &m_button[id]; bmp = button->imgNormal;
 		button->right = w - (gap << 1);
@@ -276,6 +272,11 @@ public:
 		button->left = button->right - bmp->w;
 		button->top = gap;
 		button->bottom = button->top + bmp->h;
+
+		m_editBox.top = button->bottom + 4;
+		m_editBox.bottom = ((top1 < top0) ? top1 : top0) - 4;
+		m_editBox.left = 0;
+		m_editBox.right = w;
 	}
 
 
@@ -297,6 +298,23 @@ public:
 
 	int Draw()
 	{
+		U32* editScreenBuff = nullptr;
+		XRECT r;
+		int w = m_area.right - m_area.left;
+		int h = m_area.bottom - m_area.top;
+
+		if (nullptr != m_screen)
+		{
+			int size;
+			r.left = m_editBox.left;
+			r.top = m_editBox.top;
+			r.right = m_editBox.right;
+			r.bottom = m_editBox.bottom;
+			editScreenBuff = m_screen + r.top * w;
+			size = (r.right - r.left) * (r.bottom - r.top);
+			ScreenClear(editScreenBuff, (U32)size, 0xFFF7F7F7);
+		}
+
 		return 0;
 	}
 
@@ -320,7 +338,7 @@ public:
 		if (false == CreateEditWindow())
 			return (-1);
 
-		m_hCursorIBeam = ::LoadCursor(NULL, IDC_HELP);
+		m_hCursorIBeam = ::LoadCursor(NULL, IDC_IBEAM);
 		if (nullptr == m_hCursorIBeam)
 			return (-2);
 		return 0;
@@ -361,7 +379,7 @@ public:
 
 		if (XWinPointInRect(xPos, yPos, &r))
 		{
-			SetCursor(m_hCursorIBeam);
+			::SetCursor(m_hCursorIBeam);
 		}
 
 		return 0; 

@@ -144,12 +144,16 @@ int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, 
 	uint32_t* p;
 	int SW, SH;
 
+	assert(dx >= 0);
+
 	if (dx >= w || dy >= h) // not in the scope
 		return 0;
 	if (dy < 0)
 	{
 		sh += dy;
 		dy = 0;
+		if (sh < 0)
+			return 0;
 	}
 
 	SW = sw;
@@ -166,7 +170,6 @@ int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, 
 		for (int k = 0; k < SW; k++)
 			*startDST++ = color;
 	}
-
 	return 0;
 }
 

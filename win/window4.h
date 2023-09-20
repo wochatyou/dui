@@ -81,6 +81,7 @@ public:
 	BLFont	m_font1;
 	int		m_lineHeight0 = 0;
 	int		m_lineHeight1 = 0;
+	int     m_widthOld = 0;
 
 	XChatMessage* m_rootMessage = nullptr;
 
@@ -96,11 +97,14 @@ public:
 		XChatMessage* p = nullptr;
 		XChatMessage* q = nullptr;
 
-		InitalizeTestText();
+		//m_rootMessage = nullptr;
+		//return 0;
 
+		InitalizeTestText();
+		
 		size_t size = sizeof(txtdata)/sizeof(U16*);
 		
-		for (size_t i = 0; i < size; i++)
+		for (size_t i = 0; i < 10; i++)
 		{
 			pTxt = txtdata[i];
 			assert(pTxt);
@@ -161,6 +165,18 @@ public:
 		U16 i, lines, u16Num;
 		XChatMessage* p = m_rootMessage;
 		
+		if (0 != m_widthOld)
+		{
+			// the width does not change, we do not need to re-calculate the text layout
+			if (w == m_widthOld) 
+			{
+				m_ptOffset.y = (m_sizeAll.cy > h) ? m_sizeAll.cy - h : 0;
+				return;
+			}
+		}
+
+		m_widthOld = w;
+
 		assert(w > 300);
 		W = DUI_ALIGN_DEFAULT32(w - 220);
 
