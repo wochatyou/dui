@@ -142,7 +142,7 @@ public:
 		id = XWIN5_BITMAP_SENDMESSAGEP; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpSendMessageP; bmp->w = w; bmp->h = h;
 		id = XWIN5_BITMAP_SENDMESSAGEA; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpSendMessageH; bmp->w = w; bmp->h = h;
 
-		w = 145; h = 16;
+		w = 108; h = 14;
 		id = XWIN5_BITMAP_HINTN; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
 		id = XWIN5_BITMAP_HINTH; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
 		id = XWIN5_BITMAP_HINTP; bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpHint; bmp->w = w; bmp->h = h;
@@ -352,6 +352,7 @@ public:
 		int r = DUI_STATUS_NODRAW;
 		if(m_editBox.IsFocused())
 		{
+			m_editBox.FlipCaret();
 			r = DUI_STATUS_NEEDRAW;
 		}
 
@@ -419,14 +420,9 @@ public:
 
     int DoFocusLose(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) 
     { 
-    	int r = DUI_STATUS_NODRAW;
-    	bool isFocused = m_editBox.IsFocused();
-    	
     	m_editBox.ClearFocusedStatus();
-    	if(isFocused)
-    		r = DUI_STATUS_NEEDRAW;
 
-    	return r; 
+    	return DUI_STATUS_NEEDRAW;
     } 
 
 };

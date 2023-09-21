@@ -2,6 +2,10 @@
 #define __WOCHAT_WINDOWS3_H__
 
 #include "dui/dui_win.h"
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
+U32 ftbuf[4096];
 
 uint16_t titlewin3[] = { 0x0044,0x0042,0x0041,0x57f9,0x8bad,0x7fa4,0x0028,0x0032,0x0035,0x0037,0x0029,0x0000 };
 enum 
@@ -28,6 +32,9 @@ private:
 		GAP_RIGHT3 = 10
 	};
 
+	FT_Library m_ftLibrary = nullptr;
+	FT_Face m_ftFace = nullptr;
+
 public:
 	XWindow3()
 	{
@@ -36,8 +43,6 @@ public:
 		m_buttonEndIdx = XWIN3_BUTTON_DOT;
 		m_property |= DUI_PROP_MOVEWIN;
 		m_message = WM_WIN3_MESSAGE;
-
-		InitButtons();
 	}
 
 	~XWindow3()
@@ -112,9 +117,68 @@ public:
 		UpdateButtonPosition();
 	}
 
+	int DoDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	{
+		assert(m_ftLibrary);
+		assert(m_ftFace);
+
+		FT_Done_Face(m_ftFace);
+		FT_Done_FreeType(m_ftLibrary);
+
+		return 0;
+	}
+
+#define FONT_SIZE 36
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
-		//InitButtons();
+		FT_Bitmap* ftBmp;
+		int row, col, dx, dy, w = 64, h = 64;
+		unsigned char g;
+		U32 G;
+		U32* p;
+		U8* q;
+		wchar_t character = 'i';
+
+		InitButtons();
+
+		for (int i = 0; i < 4096; i++)
+			ftbuf[i] = 0xFF000000;
+
+		FT_Init_FreeType(&m_ftLibrary);
+		if (nullptr == m_ftLibrary)
+			return (-1);
+		
+		FT_New_Face(m_ftLibrary, "c:\\windev\\OPlusSans3Light.ttf", 0, &m_ftFace);
+		if (nullptr == m_ftFace)
+		{
+			FT_Done_FreeType(m_ftLibrary);
+			return (-2);
+		}
+
+		//FT_Set_Pixel_Sizes(m_ftFace, 0, 32);
+		FT_Set_Char_Size(m_ftFace, FONT_SIZE * 64, FONT_SIZE * 64, 0, 0);
+
+		FT_Load_Char(m_ftFace, character, FT_LOAD_RENDER);
+		ftBmp = &(m_ftFace->glyph->bitmap);
+
+		dx = 8; dy = 8;
+		p = (U32*)ftbuf;
+		for (row = 0; row < ftBmp->rows; row++)
+		{
+			p = (U32*)ftbuf + (dy + row) * w + dx;
+			for (col = 0; col < ftBmp->width; col++)
+			{
+				g = ftBmp->buffer[row * ftBmp->width + col];
+				if (g)
+				{
+					G = g;
+					G = ((G << 16) | (G << 8) | G) | 0xFF000000;
+					*p = G;
+				}
+				p++;
+			}
+		}
+
 		return 0;
 	}
 
@@ -128,6 +192,8 @@ public:
 	{
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
+
+		//ScreenDrawRect(m_screen, w, h, (U32*)ftbuf, 64, 64, 0, 0);
 
 		return 0;
 	}

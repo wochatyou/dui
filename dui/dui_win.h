@@ -184,12 +184,24 @@ public:
 
     void ClearFocusedStatus()
     {
-        _status &= ~XEDIT_STATUS_FOCUS;
+        _status &= ~(XEDIT_STATUS_FOCUS | XEDIT_STATUS_CARET);
     }
 
     void SetFocusedStatus()
     {
         _status |= XEDIT_STATUS_FOCUS;
+    }
+
+    void FlipCaret()
+    {
+        if (XEDIT_STATUS_CARET & _status)
+        {
+            _status &= ~XEDIT_STATUS_CARET;
+        }
+        else
+        {
+            _status |= XEDIT_STATUS_CARET;
+        }
     }
 
     void AttachScreenBuffer(U32* buf, U32 size)
@@ -204,15 +216,7 @@ public:
             return 0;
 
         ScreenClear(_buffer, _size, _backgroundColor);
-        
-        if(XEDIT_STATUS_CARET & _status)
-        {
-            _status &= ~XEDIT_STATUS_CARET;
-        }
-        else
-        {
-            _status |= XEDIT_STATUS_CARET;
-        }
+       
 
         if(XEDIT_STATUS_CARET & _status)
         {
@@ -663,7 +667,7 @@ public:
     int OnTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
     {
         int r = DUI_STATUS_NODRAW;
-        if(DUI_PROP_HANDLETIMER & m_status)
+        if(DUI_PROP_HANDLETIMER & m_property)
         {
             T* pT = static_cast<T*>(this);
             r = pT->DoTimer(uMsg, wParam, lParam, lpData);
@@ -691,7 +695,8 @@ public:
 
                 if (m_sizeAll.cy > h)
                 {
-                    r0 = DUI_STATUS_NEEDRAW;
+                    int yOld = m_ptOffset.y;
+
                     assert(m_sizeLine.cy > 0);
                     if (delta < 0)
                         m_ptOffset.y += m_sizeLine.cy;
@@ -702,6 +707,9 @@ public:
                         m_ptOffset.y = 0;
                     if (m_ptOffset.y > (m_sizeAll.cy - h))
                         m_ptOffset.y = m_sizeAll.cy - h;
+
+                    if(yOld != m_ptOffset.y)
+                        r0 = DUI_STATUS_NEEDRAW;
                 }
 
                 {  // let the derived class to do its stuff
@@ -859,7 +867,8 @@ public:
     }
 
     int DoFocusGet(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
-    int DoFocusLose(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; } 
+    int DoFocusLose
+    (U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
 
     int DoLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
     int OnLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)

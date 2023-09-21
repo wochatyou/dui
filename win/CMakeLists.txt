@@ -20,7 +20,6 @@ target_link_libraries(${PROJECT_NAME} blend2d::blend2d libdui)
 set_property(TARGET ${PROJECT_NAME} PROPERTY
   MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
-target_link_libraries(${PROJECT_NAME} libutils libdui libbitcoin libimgui)
 target_link_libraries(${PROJECT_NAME} debug c:/vcpkg/packages/freetype_x64-windows-static/debug/lib/freetyped.lib)
 target_link_libraries(${PROJECT_NAME} optimized c:/vcpkg/packages/freetype_x64-windows-static/lib/freetype.lib)
 

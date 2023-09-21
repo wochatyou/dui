@@ -61,6 +61,8 @@ void SafeRelease(T** ppT)
 
 #define XWIN_500MS_TIMER		123
 
+wchar_t xtitle[256] = { 0 };
+
 class XWindow : public ATL::CWindowImpl<XWindow>
 {
 private:
@@ -114,6 +116,12 @@ private:
 	XWindow3 m_win3;
 	XWindow4 m_win4;
 	XWindow5 m_win5;
+	U32 m0 = 0;
+	U32 m1 = 0;
+	U32 m2 = 0;
+	U32 m3 = 0;
+	U32 m4 = 0;
+	U32 m5 = 0;
 
 	ID2D1Factory*          m_pD2DFactory = nullptr;
 	ID2D1HwndRenderTarget* m_pD2DRenderTarget = nullptr;
@@ -228,7 +236,7 @@ public:
 			return 0;
 		}
 
-		SetTimer(XWIN_500MS_TIMER, 500);
+		SetTimer(XWIN_500MS_TIMER, 600);
 
 		return 0;
 	}
@@ -957,6 +965,7 @@ public:
 			src = m_win0.Render();
 			if (nullptr != src)
 			{
+				m0++;
 				ID2D1Bitmap* pBitmap = nullptr;
 				XRECT* xr = m_win0.GetWindowArea();
 				w = xr->right - xr->left; h = xr->bottom - xr->top;
@@ -974,6 +983,7 @@ public:
 			src = m_win1.Render();
 			if (nullptr != src)
 			{
+				m1++;
 				ID2D1Bitmap* pBitmap = nullptr;
 				XRECT* xr = m_win1.GetWindowArea();
 				w = xr->right - xr->left; h = xr->bottom - xr->top;
@@ -991,6 +1001,7 @@ public:
 			src = m_win2.Render();
 			if (nullptr != src)
 			{
+				m2++;
 				ID2D1Bitmap* pBitmap = nullptr;
 				XRECT* xr = m_win2.GetWindowArea();
 				w = xr->right - xr->left; h = xr->bottom - xr->top;
@@ -1008,6 +1019,7 @@ public:
 			src = m_win3.Render();
 			if (nullptr != src)
 			{
+				m3++;
 				ID2D1Bitmap* pBitmap = nullptr;
 				XRECT* xr = m_win3.GetWindowArea();
 				w = xr->right - xr->left; h = xr->bottom - xr->top;
@@ -1025,6 +1037,7 @@ public:
 			src = m_win4.Render();
 			if (nullptr != src)
 			{
+				m4++;
 				ID2D1Bitmap* pBitmap = nullptr;
 				XRECT* xr = m_win4.GetWindowArea();
 				w = xr->right - xr->left; h = xr->bottom - xr->top;
@@ -1042,6 +1055,7 @@ public:
 			src = m_win5.Render();
 			if (nullptr != src)
 			{
+				m5++;
 				ID2D1Bitmap* pBitmap = nullptr;
 				XRECT* xr = m_win5.GetWindowArea();
 				w = xr->right - xr->left; h = xr->bottom - xr->top;
@@ -1064,6 +1078,10 @@ public:
 		}
 
 		EndPaint(&ps);
+
+		swprintf((wchar_t*)xtitle, 255, L"DuiApp W0: %04d - W1: %04d  - W2: %04d - W3: %04d - W4: %04d - W5: %04d", m0, m1, m2, m3, m4, m5);
+		::SetWindowTextW(m_hWnd, (LPCWSTR)xtitle);
+
 		return 0;
 	}
 
