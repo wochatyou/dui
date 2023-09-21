@@ -21,6 +21,7 @@
 #define DUI_ALIGN_DEFAULT32(size)   DUI_ALIGN(size, 4)
 #define DUI_ALIGN_DEFAULT64(size)   DUI_ALIGN(size, 8)      /** Default alignment */
 #define DUI_ALIGN_PAGE(size)        DUI_ALIGN(size, 1<<16)
+#define DUI_ALIGN_FREETYPE(size)    DUI_ALIGN(size, 64)    
 
 
 int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color);

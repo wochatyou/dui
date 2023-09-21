@@ -2,10 +2,10 @@
 #define __WOCHAT_WINDOWS3_H__
 
 #include "dui/dui_win.h"
-#include <ft2build.h>
-#include FT_FREETYPE_H
-
-U32 ftbuf[4096];
+#include <harfbuzz/hb.h>
+#include <harfbuzz/hb-ft.h>
+#include <cairo/cairo.h>
+#include <cairo/cairo-ft.h>
 
 uint16_t titlewin3[] = { 0x0044,0x0042,0x0041,0x57f9,0x8bad,0x7fa4,0x0028,0x0032,0x0035,0x0037,0x0029,0x0000 };
 enum 
@@ -128,55 +128,30 @@ public:
 		return 0;
 	}
 
-#define FONT_SIZE 36
+#define FONT_SIZE 18
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
-		FT_Bitmap* ftBmp;
-		int row, col, dx, dy, w = 64, h = 64;
-		unsigned char g;
-		U32 G;
-		U32* p;
-		U8* q;
-		wchar_t character = 'i';
+		FT_Error ft_error;
 
 		InitButtons();
 
-		for (int i = 0; i < 4096; i++)
-			ftbuf[i] = 0xFF000000;
-
-		FT_Init_FreeType(&m_ftLibrary);
-		if (nullptr == m_ftLibrary)
+		ft_error = FT_Init_FreeType(&m_ftLibrary);
+		if (ft_error || nullptr == m_ftLibrary)
 			return (-1);
 		
-		FT_New_Face(m_ftLibrary, "c:\\windev\\OPlusSans3Light.ttf", 0, &m_ftFace);
-		if (nullptr == m_ftFace)
+		ft_error = FT_New_Face(m_ftLibrary, "c:\\windev\\OPlusSans3Light.ttf", 0, &m_ftFace);
+		if (ft_error || nullptr == m_ftFace)
 		{
 			FT_Done_FreeType(m_ftLibrary);
 			return (-2);
 		}
 
-		//FT_Set_Pixel_Sizes(m_ftFace, 0, 32);
-		FT_Set_Char_Size(m_ftFace, FONT_SIZE * 64, FONT_SIZE * 64, 0, 0);
-
-		FT_Load_Char(m_ftFace, character, FT_LOAD_RENDER);
-		ftBmp = &(m_ftFace->glyph->bitmap);
-
-		dx = 8; dy = 8;
-		p = (U32*)ftbuf;
-		for (row = 0; row < ftBmp->rows; row++)
+		ft_error = FT_Set_Char_Size(m_ftFace, FONT_SIZE * 64, FONT_SIZE * 64, 0, 0);
+		if (ft_error)
 		{
-			p = (U32*)ftbuf + (dy + row) * w + dx;
-			for (col = 0; col < ftBmp->width; col++)
-			{
-				g = ftBmp->buffer[row * ftBmp->width + col];
-				if (g)
-				{
-					G = g;
-					G = ((G << 16) | (G << 8) | G) | 0xFF000000;
-					*p = G;
-				}
-				p++;
-			}
+			FT_Done_Face(m_ftFace);
+			FT_Done_FreeType(m_ftLibrary);
+			return (-3);
 		}
 
 		return 0;
@@ -190,10 +165,81 @@ public:
 
 	int Draw()
 	{
+		U32 len;
+		int i, W, H;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 
-		//ScreenDrawRect(m_screen, w, h, (U32*)ftbuf, 64, 64, 0, 0);
+		hb_font_t* hb_font;
+		hb_font = hb_ft_font_create(m_ftFace, NULL);
+		hb_buffer_t* hb_buffer = hb_buffer_create();
+		hb_buffer_add_utf16(hb_buffer, (const uint16_t*)titlewin3, -1, 0, -1);
+		hb_buffer_guess_segment_properties(hb_buffer);
+		/* Shape it! */
+		hb_shape(hb_font, hb_buffer, NULL, 0);
+
+		/* Get glyph information and positions out of the buffer. */
+		len = hb_buffer_get_length(hb_buffer);
+		hb_glyph_info_t* info = hb_buffer_get_glyph_infos(hb_buffer, NULL);
+		hb_glyph_position_t* pos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
+
+		W = 4; H = 0;
+		for (i = 0; i < len; i++)
+		{
+			W += (DUI_ALIGN_FREETYPE(pos[i].x_advance) >> 6);
+			H -= (DUI_ALIGN_FREETYPE(pos[i].y_advance) >> 6);
+		}
+		if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(hb_buffer)))
+			H += (FONT_SIZE + 8);
+
+		cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, W, H);
+		cairo_t* cr = cairo_create(cairo_surface);
+		cairo_set_source_rgba(cr, 0., 1., 1., 1.);
+		cairo_paint(cr);
+		cairo_set_source_rgba(cr, 1., 0., 0., 1.);
+		cairo_translate(cr, 2, 4);
+		/* Set up cairo font face. */
+		cairo_font_face_t* cairo_face;
+		cairo_face = cairo_ft_font_face_create_for_ft_face(m_ftFace, 0);
+		cairo_set_font_face(cr, cairo_face);
+		cairo_set_font_size(cr, FONT_SIZE);
+		if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(hb_buffer)))
+		{
+			cairo_font_extents_t font_extents;
+			cairo_font_extents(cr, &font_extents);
+			double baseline = (FONT_SIZE - font_extents.height) * .5 + font_extents.ascent;
+			cairo_translate(cr, 0, baseline);
+		}
+		else
+		{
+			cairo_translate(cr, FONT_SIZE * .5, 0);
+		}
+		cairo_glyph_t* cairo_glyphs = cairo_glyph_allocate(len);
+
+		double current_x = 0;
+		double current_y = 0;
+
+		for (i = 0; i < len; i++)
+		{
+			cairo_glyphs[i].index = info[i].codepoint;
+			cairo_glyphs[i].x = current_x + pos[i].x_offset / 64.;
+			cairo_glyphs[i].y = -(current_y + pos[i].y_offset / 64.);
+			current_x += pos[i].x_advance / 64.;
+			current_y += pos[i].y_advance / 64.;
+		}
+		cairo_show_glyphs(cr, cairo_glyphs, len);
+		cairo_glyph_free(cairo_glyphs);
+
+		unsigned char* data = cairo_image_surface_get_data(cairo_surface);
+		int stride = cairo_image_surface_get_stride(cairo_surface);
+
+		ScreenDrawRect(m_screen, w, h, (U32*)data, W, H, 10, 10);
+
+		cairo_font_face_destroy(cairo_face);
+		cairo_destroy(cr);
+		cairo_surface_destroy(cairo_surface);
+		hb_buffer_destroy(hb_buffer);
+		hb_font_destroy(hb_font);
 
 		return 0;
 	}
