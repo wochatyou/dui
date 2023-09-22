@@ -206,7 +206,7 @@ U16 testNewLine[] = {
 
 void InitalizeTestText()
 {
-	txtdata[0]  = (uint16_t*)t6;
+	txtdata[0]  = (uint16_t*)t0;
 	txtdata[1]  = (uint16_t*)t1;
 	txtdata[2]  = (uint16_t*)t2;
 	txtdata[3]  = (uint16_t*)t3;

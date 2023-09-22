@@ -260,6 +260,12 @@ static void ExitInstance(HINSTANCE hInstance)
 	// tell all threads to quit
 	InterlockedIncrement(&g_Quit);
 
+	if (nullptr != g_ftFace1)
+	{
+		FT_Done_Face(g_ftFace1);
+		g_ftFace1 = nullptr;
+	}
+
 	if (nullptr != g_ftFace0)
 	{
 		FT_Done_Face(g_ftFace0);

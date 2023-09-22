@@ -52,7 +52,7 @@ extern LONG				g_threadCount;
 extern HINSTANCE		g_hInstance;
 //extern BLFontFace		g_fontFace;
 
-#define XFONT_SIZE0		15
+#define XFONT_SIZE0		16
 #define XFONT_SIZE1		13
 
 extern FT_Library		g_ftLibrary;

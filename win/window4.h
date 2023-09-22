@@ -50,8 +50,8 @@ private:
 	enum {
 		GAP_TOP4 = 40,
 		GAP_BOTTOM4 = 10,
-		GAP_LEFT4 = 0,
-		GAP_RIGHT4 = 0,
+		GAP_LEFT4 = 10,
+		GAP_RIGHT4 = 10,
 		GAP_MESSAGE = 20
 	};
 
@@ -81,6 +81,14 @@ public:
 	int		m_lineHeight1 = 0;
 	int     m_widthOld = 0;
 
+	// cairo/harfbuzz issue to cache to speed up
+	cairo_font_extents_t m_font_extents = { 0 };
+	cairo_glyph_t* m_cairo_glyphs = nullptr;
+	cairo_font_face_t* m_cairo_face = nullptr;
+	hb_font_t* m_hb_font0 = nullptr;
+	hb_font_t* m_hb_font1 = nullptr;
+	hb_buffer_t* m_hb_buffer = nullptr;
+
 	XChatMessage* m_rootMessage = nullptr;
 
 	int UpdateChatHistory(uint16_t* msgText, U8 msgtype = 0)
@@ -90,24 +98,19 @@ public:
 
 	int LoadChatHistory()
 	{
-		U16 len;
+		U16 i, idx, len, c;
 		U16* pTxt;
+		U16* m;
 		XChatMessage* p = nullptr;
 		XChatMessage* q = nullptr;
 
 		InitalizeTestText();
-		
+
+		assert(m_pool);
 		size_t size = sizeof(txtdata)/sizeof(U16*);
 		
-		for (size_t i = 0; i < 1; i++)
+		for (i = 0; i < (U16)size; i++)
 		{
-			pTxt = txtdata[i];
-			assert(pTxt);
-			len = 0;
-			while (0 != *pTxt++ && len < MAX_INPUT_MESSAGE_LEN)  // we only allow MAX_INPUT_MESSAGE_LEN - 1 characters in one message
-				len++;
-			
-			assert(m_pool);
 			p = (XChatMessage*)palloc0(m_pool, sizeof(XChatMessage));
 			if (nullptr == p)
 				break;
@@ -117,14 +120,28 @@ public:
 			if (nullptr != q)
 				q->next_ = p;
 
-			q = p;
-			p->icon_ = (0 == i % 2) ? (U32*)xbmpHeadGirl : (U32*)xbmpHeadMe;
-			p->w_ = p->h_ = 34;
-			p->state_ = i;
-			p->name_ = (U16*)name;
-			p->msgLen_ = len;
-			p->message_ = txtdata[i];
 			p->next_ = nullptr;
+
+			pTxt = txtdata[i];
+			assert(pTxt);
+			len = 0;
+			while (0 != *pTxt++ && len < MAX_INPUT_MESSAGE_LEN)  // we only allow MAX_INPUT_MESSAGE_LEN - 1 characters in one message
+				len++;
+			p->message_ = (U16*)palloc(m_pool, sizeof(U16)*(len+1));
+			if (nullptr != p->message_)
+			{
+				p->message_[0] = len; // save the string length to the first 2 bytes
+				m = p->message_ + 1;
+				pTxt = txtdata[i];
+				for (idx = 0; idx < len; idx++)
+					m[idx] = pTxt[idx];
+				q = p;
+				p->icon_ = (0 == i % 2) ? (U32*)xbmpHeadGirl : (U32*)xbmpHeadMe;
+				p->w_ = p->h_ = 34;
+				p->state_ = i;
+				p->name_ = (U16*)name;
+				p->msgLen_ = len;
+			}
 		}
 
 		return 0;
@@ -133,6 +150,8 @@ public:
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
 		int ret = 0;
+		hb_bool_t hs = 0;
+
 #if 0
 		double lineHeight = 0;
 
@@ -142,9 +161,68 @@ public:
 			0x9F, 0
 		};
 #endif		
+
+		assert(nullptr == m_cairo_glyphs);
+		m_cairo_glyphs = cairo_glyph_allocate(1024);
+		if (nullptr == m_cairo_glyphs)
+			return(-1);
+
+		assert(nullptr != g_ftFace0);
+		assert(nullptr != g_ftFace1);
+		assert(nullptr == m_cairo_face);
+		m_cairo_face = cairo_ft_font_face_create_for_ft_face(g_ftFace0, 0);
+		if (nullptr == m_cairo_face)
+		{
+			cairo_glyph_free(m_cairo_glyphs);
+			m_cairo_glyphs = nullptr;
+			return (-2);
+		}
+
+		assert(nullptr == m_hb_font0);
+		m_hb_font0 = hb_ft_font_create(g_ftFace0, NULL);
+		if (nullptr == m_hb_font0)
+		{
+			cairo_glyph_free(m_cairo_glyphs);
+			m_cairo_glyphs = nullptr;
+			cairo_font_face_destroy(m_cairo_face);
+			m_cairo_face = nullptr;
+			return (-3);
+		}
+
+		assert(nullptr == m_hb_font1);
+		m_hb_font1 = hb_ft_font_create(g_ftFace1, NULL);
+		if (nullptr == m_hb_font1)
+		{
+			cairo_glyph_free(m_cairo_glyphs);
+			m_cairo_glyphs = nullptr;
+			cairo_font_face_destroy(m_cairo_face);
+			m_cairo_face = nullptr;
+			hb_font_destroy(m_hb_font0);
+			m_hb_font0 = nullptr;
+			return (-3);
+		}
+
+		assert(nullptr == m_hb_buffer);
+		m_hb_buffer = hb_buffer_create();
+		hs = hb_buffer_allocation_successful(m_hb_buffer);
+		if (0 == hs || nullptr == m_hb_buffer)
+		{
+			cairo_glyph_free(m_cairo_glyphs);
+			m_cairo_glyphs = nullptr;
+			cairo_font_face_destroy(m_cairo_face);
+			m_cairo_face = nullptr;
+
+			hb_font_destroy(m_hb_font0);
+			m_hb_font0 = nullptr;
+			hb_font_destroy(m_hb_font1);
+			m_hb_font1 = nullptr;
+
+			return (-4);
+		}
+
 		// detect the line height
 		m_lineHeight0 = 0;
-		cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 128, 64);
+		cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 64, 64);
 		cairo_status_t cs = cairo_surface_status(cairo_surface);
 		if (CAIRO_STATUS_SUCCESS == cs)
 		{
@@ -152,17 +230,11 @@ public:
 			cs = cairo_status(cr);
 			if (CAIRO_STATUS_SUCCESS == cs)
 			{
-				cairo_glyph_t* cairo_glyphs;
-				cairo_font_extents_t font_extents;
-
-				assert(nullptr != g_ftFace0);
-				cairo_font_face_t* cairo_face = cairo_ft_font_face_create_for_ft_face(g_ftFace0, 0);
-				assert(nullptr != cairo_face);
-				cairo_set_font_face(cr, cairo_face);
+				cairo_set_font_face(cr, m_cairo_face);
 				cairo_set_font_size(cr, XFONT_SIZE0);
-				cairo_font_extents(cr, &font_extents);
+				cairo_font_extents(cr, &m_font_extents);
 				
-				m_lineHeight0 = 1 + (int)font_extents.height;
+				m_lineHeight0 = 1 + (int)m_font_extents.height;
 #if 0
 				hb_font_t* hb_font = hb_ft_font_create(g_ftFace0, NULL);
 				assert(nullptr != hb_font);
@@ -209,7 +281,6 @@ public:
 					hb_font_destroy(hb_font);
 				}
 #endif
-				cairo_font_face_destroy(cairo_face);
 				cairo_destroy(cr);
 			}
 			cairo_surface_destroy(cairo_surface);
@@ -219,6 +290,7 @@ public:
 			return(-1);
 
 		m_sizeLine.cy = m_lineHeight0;
+
 
 		m_pool = mempool_create(0, 0, 0);
 		if (nullptr == m_pool)
@@ -231,13 +303,14 @@ public:
 
 	void UpdatePosition() 
 	{
-		int W, H;
+		int W, H, width;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 		U16 i, lines, u16Num;
+		U16* m;
 		XChatMessage* p = m_rootMessage;
 		
-		if (0 != m_widthOld)
+		if (m_widthOld > 0)
 		{
 			// the width does not change, we do not need to re-calculate the text layout
 			if (w == m_widthOld) 
@@ -248,15 +321,17 @@ public:
 		}
 
 		m_widthOld = w;
-
 		assert(w > 300);
-		W = DUI_ALIGN_DEFAULT32(w - 220);
+		W = DUI_ALIGN_DEFAULT32(w - 200);
 
+		assert(nullptr != m_pool);
 		m_sizeAll.cy = GAP_MESSAGE;
-
 		while (nullptr != p)
 		{
-			p->width_ = 18 + TextLayout(W, p->message_, p->msgLen_);
+			u16Num = p->message_[0];
+			m = p->message_ + 1;
+			width = TextLayout(W, m, u16Num);
+			p->width_ = GAP_LEFT4 + width + GAP_RIGHT4;
 				
 			lines = _TextWrapIdxTab[0];
 			if (lines > 0)
@@ -266,7 +341,7 @@ public:
 				p->textWrapTab_ = (U16*)palloc(m_pool, sizeof(U16) * u16Num);
 				if (nullptr != p->textWrapTab_)
 				{
-					for (i = 0; i <= u16Num; i++)
+					for (i = 0; i < u16Num; i++)
 						p->textWrapTab_[i] = _TextWrapIdxTab[i];
 
 					H = m_lineHeight0 * (lines + 1);
@@ -299,66 +374,57 @@ public:
 		charMaxLen = characters;
 		charBaseIdx = 0;
 
-		assert(nullptr != g_ftFace0);
-		hb_font_t* hb_font = hb_ft_font_create(g_ftFace0, NULL);
-		assert(nullptr != hb_font);
-		hb_buffer_t* hb_buffer = hb_buffer_create();
-		hb_bool_t hs = hb_buffer_allocation_successful(hb_buffer);
-		if (hs)
+		// we scan the whole string, maybe we can find "\n", maybe not
+		for (i = 0; i < characters; i++)
 		{
-			// we scan the whole string, maybe we can find "\n", maybe not
-			for (i = 0; i < characters; i++)
+			if (0 == txt[i])  // it is a zero-terminated string
 			{
-				if (0 == txt[i])  // it is a zero-terminated string
-				{
-					charMaxLen = i;
-					break;
-				}
-
-				if (0x0A == txt[i])
-				{
-					charLen = i - charBaseIdx;
-					if (charLen > 0)
-					{
-						w = TextLayoutOneLine(width, txt, charBaseIdx, charLen, hb_font, hb_buffer);
-						if (MaxWidth < w)
-							MaxWidth = w;
-					}
-					else  // "\n\n\n\n"
-					{
-						idx = _TextWrapIdxTab[0] << 1;
-						_TextWrapIdxTab[idx + 1] = charBaseIdx;
-						_TextWrapIdxTab[idx + 2] = 0;
-						_TextWrapIdxTab[0]++;
-					}
-					charBaseIdx = i + 1; // pointing to the next character of "\n"
-				}
+				charMaxLen = i;
+				break;
 			}
 
-			if (charMaxLen > 0)
+			if (0x0A == txt[i])
 			{
-				if (charBaseIdx <= charMaxLen - 1) // we still have characters after the last "\n"
+				charLen = i - charBaseIdx;
+				if (charLen > 0)
 				{
-					w = TextLayoutOneLine(width, txt, charBaseIdx, (charMaxLen - charBaseIdx), hb_font, hb_buffer);
+					w = TextLayoutOneLine(width, txt, charBaseIdx, charLen);
 					if (MaxWidth < w)
 						MaxWidth = w;
 				}
+				else  // "\n\n\n\n"
+				{
+					idx = _TextWrapIdxTab[0] << 1;
+					_TextWrapIdxTab[idx + 1] = charBaseIdx;
+					_TextWrapIdxTab[idx + 2] = 0;
+					_TextWrapIdxTab[0]++;
+				}
+				charBaseIdx = i + 1; // pointing to the next character of "\n"
+			}
+		}
+
+		if (charMaxLen > 0)
+		{
+			if (charBaseIdx <= charMaxLen - 1) // we still have characters after the last "\n"
+			{
+				w = TextLayoutOneLine(width, txt, charBaseIdx, (charMaxLen - charBaseIdx));
+				if (MaxWidth < w)
+					MaxWidth = w;
 			}
 		}
 
 		return MaxWidth;
 	}
 
-
 	// We assume that txt is a single line, which means there is no "\n" in it.
-	int TextLayoutOneLine(int width, U16* txt, U16 base, U16 len, hb_font_t* hb_font, hb_buffer_t* hb_buffer)
+	int TextLayoutOneLine(int width, U16* txt, U16 base, U16 len)
 	{
 		int w, MaxWidth = 0;
 		U16 charBaseIdx, charOldLen, charLen, charRemaining;
 		U16 charBaseLen, halfSize, lines, i;
 		U16* p;
 		U16* wrapIdx;
-		unsigned int glyphLen;
+		unsigned int idx, glyphLen;
 		hb_glyph_info_t* hbinfo;
 		hb_glyph_position_t* hbpos;
 
@@ -380,13 +446,13 @@ public:
 				charLen = charBaseLen + halfSize;
 				assert(charLen <= charRemaining);
 
-				hb_buffer_reset(hb_buffer);
-				hb_buffer_add_utf16(hb_buffer, (const uint16_t*)p, charLen, 0, charLen);
-				hb_buffer_guess_segment_properties(hb_buffer);
-				hb_shape(hb_font, hb_buffer, NULL, 0);
-				glyphLen = hb_buffer_get_length(hb_buffer);
-				hbinfo = hb_buffer_get_glyph_infos(hb_buffer, NULL);
-				hbpos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
+				hb_buffer_reset(m_hb_buffer);
+				hb_buffer_add_utf16(m_hb_buffer, (const uint16_t*)p, charLen, 0, charLen);
+				hb_buffer_guess_segment_properties(m_hb_buffer);
+				hb_shape(m_hb_font0, m_hb_buffer, NULL, 0);
+				glyphLen = hb_buffer_get_length(m_hb_buffer);
+				//hbinfo = hb_buffer_get_glyph_infos(m_hb_buffer, NULL);
+				hbpos = hb_buffer_get_glyph_positions(m_hb_buffer, NULL);
 				w = 0;
 				for (i = 0; i < glyphLen; i++)
 				{
@@ -410,17 +476,17 @@ public:
 			{
 				for (i = 0; i < charRemaining - charLen; i++)
 				{
-					hb_buffer_reset(hb_buffer);
-					hb_buffer_add_utf16(hb_buffer, (const uint16_t*)p, charLen, 0, charLen);
-					hb_buffer_guess_segment_properties(hb_buffer);
-					hb_shape(hb_font, hb_buffer, NULL, 0);
-					glyphLen = hb_buffer_get_length(hb_buffer);
-					hbinfo = hb_buffer_get_glyph_infos(hb_buffer, NULL);
-					hbpos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
+					hb_buffer_reset(m_hb_buffer);
+					hb_buffer_add_utf16(m_hb_buffer, (const uint16_t*)p, charLen + i, 0, charLen + i);
+					hb_buffer_guess_segment_properties(m_hb_buffer);
+					hb_shape(m_hb_font0, m_hb_buffer, NULL, 0);
+					glyphLen = hb_buffer_get_length(m_hb_buffer);
+					//hbinfo = hb_buffer_get_glyph_infos(m_hb_buffer, NULL);
+					hbpos = hb_buffer_get_glyph_positions(m_hb_buffer, NULL);
 					w = 0;
-					for (i = 0; i < glyphLen; i++)
+					for (idx = 0; idx < glyphLen; idx++)
 					{
-						w += (DUI_ALIGN_TRUETYPE(hbpos[i].x_advance) >> 6);
+						w += (DUI_ALIGN_TRUETYPE(hbpos[idx].x_advance) >> 6);
 					}
 					if (w >= width)
 					{
@@ -478,15 +544,15 @@ public:
 		U16 i, lines, baseIdx, charNum;
 		unsigned int idx, glyphLen;
 		U16* m;
-		U16* msg;
+		U16 strLen;
+		U16* utf16String;
 		U32* crdata;
 		U32 color1;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 		
 		double R, G, B;
-		double current_x = 0;
-		double current_y = 0;
+		double current_x, current_y;
 
 		R = G = B = 1;
 
@@ -495,111 +561,97 @@ public:
 		cairo_surface_t* cairo_surface;
 		cairo_t* cr;
 		cairo_status_t cs;
-		cairo_glyph_t* cairo_glyphs;
-		cairo_font_extents_t font_extents;
 		double baseline;
 
-		hb_font_t* hb_font;
-		hb_buffer_t* hb_buffer;
-		hb_bool_t hs;
 		hb_glyph_info_t* hbinfo;
 		hb_glyph_position_t* hbpos;
-
-		assert(nullptr != g_ftFace0);
-		cairo_font_face_t* cairo_face = cairo_ft_font_face_create_for_ft_face(g_ftFace0, 0);
-		if (NULL == cairo_face)
-			return 0;
-
-		hb_font = hb_ft_font_create(g_ftFace0, NULL);
-		if (NULL == hb_font)
-		{
-			cairo_font_face_destroy(cairo_face);
-			return 0;
-		}
-		hb_buffer = hb_buffer_create();
-		hs = hb_buffer_allocation_successful(hb_buffer);
-		if (!hs)
-		{
-			hb_font_destroy(hb_font);
-			cairo_font_face_destroy(cairo_face);
-			return 0;
-		}
-
-		cairo_glyphs = cairo_glyph_allocate(1024);
-		if (NULL == cairo_glyphs)
-		{
-			hb_buffer_destroy(hb_buffer);
-			hb_font_destroy(hb_font);
-			cairo_font_face_destroy(cairo_face);
-			return 0;
-		}
 
 		pos = GAP_MESSAGE;
 		XChatMessage* p = m_rootMessage;
 		while (nullptr != p)
 		{
 			H = p->height_;
-
 			if (pos + H > m_ptOffset.y && pos < m_ptOffset.y + h)
 			{
+				dy = pos - m_ptOffset.y;
+				W = p->width_;
+				m = p->textWrapTab_;
 				cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, W, H - GAP_MESSAGE);
 				cairo_status_t cs = cairo_surface_status(cairo_surface);
-				if (CAIRO_STATUS_SUCCESS == cs)
+				if (nullptr != m && CAIRO_STATUS_SUCCESS == cs)
 				{
 					cr = cairo_create(cairo_surface);
 					cs = cairo_status(cr);
 					if (CAIRO_STATUS_SUCCESS == cs)
 					{
-						cairo_set_font_face(cr, cairo_face);
-						cairo_set_font_size(cr, XFONT_SIZE0);
-						cairo_font_extents(cr, &font_extents);
-						baseline = (XFONT_SIZE0 - font_extents.height) * 0.5 + font_extents.ascent;
-						cairo_translate(cr, 0, baseline + 12);
-
-						msg = p->message_;
-						hb_buffer_reset(hb_buffer);
-						hb_buffer_add_utf16(hb_buffer, (const uint16_t*)msg, -1, 0, -1);
-						hb_buffer_guess_segment_properties(hb_buffer);
-						hb_shape(hb_font, hb_buffer, NULL, 0);
-						glyphLen = hb_buffer_get_length(hb_buffer);
-						assert(glyphLen < 1024);
-						hbinfo = hb_buffer_get_glyph_infos(hb_buffer, NULL);
-						hbpos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
-
-						current_x = 0; current_y = 0;
-						for (idx = 0; idx < glyphLen; idx++)
+						if (p->state_ % 2) // me
 						{
-							cairo_glyphs[idx].index = hbinfo[idx].codepoint;
-							cairo_glyphs[idx].x = current_x + hbpos[idx].x_offset / 64.;
-							cairo_glyphs[idx].y = -(current_y + hbpos[idx].y_offset / 64.);
-							current_x += hbpos[idx].x_advance / 64.;
-							current_y += hbpos[idx].y_advance / 64.;
+							R = 0.6196; G = 0.917647; B = 0.4156862745;
+							dx = w - W - 60;
+							x = w - m_scrollWidth - p->w_ - 6;
 						}
+						else
+						{
+							R = G = B = 1;
+							dx = 60;
+							x = 10;
+						}
+
+						cairo_set_font_face(cr, m_cairo_face);
+						cairo_set_font_size(cr, XFONT_SIZE0);
+						cairo_font_extents(cr, &m_font_extents);
+						baseline = (XFONT_SIZE0 - m_font_extents.height) * 0.5 + m_font_extents.ascent + 12;
+						cairo_translate(cr, GAP_LEFT4, baseline);
 						cairo_set_source_rgba(cr, R, G, B, 1);
 						cairo_paint(cr);
 						cairo_set_source_rgba(cr, 0.3, 0.3, 0.3, 1);
-						cairo_show_glyphs(cr, cairo_glyphs, glyphLen);
+
+						lines = *m++;
+						strLen = p->message_[0];
+						utf16String = p->message_ + 1; // the first 2 bytes are the string length
+						for (i = 0; i < lines; i++)
+						{
+							baseIdx = *m++;
+							charNum = *m++;
+							if (charNum > 0)
+							{
+								hb_buffer_reset(m_hb_buffer);
+								hb_buffer_add_utf16(m_hb_buffer, (const uint16_t*)utf16String, strLen, baseIdx, charNum);
+								hb_buffer_guess_segment_properties(m_hb_buffer);
+								hb_shape(m_hb_font0, m_hb_buffer, NULL, 0);
+								glyphLen = hb_buffer_get_length(m_hb_buffer);
+								assert(glyphLen < 1024);
+								hbinfo = hb_buffer_get_glyph_infos(m_hb_buffer, NULL);
+								hbpos = hb_buffer_get_glyph_positions(m_hb_buffer, NULL);
+
+								current_x = current_y = 0;
+								for (idx = 0; idx < glyphLen; idx++)
+								{
+									m_cairo_glyphs[idx].index = hbinfo[idx].codepoint;
+									m_cairo_glyphs[idx].x = current_x + hbpos[idx].x_offset / 64.;
+									m_cairo_glyphs[idx].y = -(current_y + hbpos[idx].y_offset / 64.);
+									current_x += hbpos[idx].x_advance / 64.;
+									current_y += hbpos[idx].y_advance / 64.;
+								}
+								cairo_show_glyphs(cr, m_cairo_glyphs, glyphLen);
+								cairo_translate(cr, 0, m_lineHeight0);
+							}
+						}
 
 						crdata = (U32*)cairo_image_surface_get_data(cairo_surface);
-						ScreenDrawRect(m_screen, w, h, crdata, W, H - GAP_MESSAGE, 100, pos - m_ptOffset.y);
+						ScreenDrawRect(m_screen, w, h, crdata, W, H - GAP_MESSAGE, dx, dy);
 						cairo_destroy(cr);
 
-						x = w - m_scrollWidth - p->w_ - 6;
-						ScreenDrawRectRound(m_screen, w, h, (U32*)p->icon_, p->w_, p->h_, x, pos - m_ptOffset.y, m_backgroundColor, m_backgroundColor);
+						ScreenDrawRectRound(m_screen, w, h, (U32*)p->icon_, p->w_, p->h_, x, dy, m_backgroundColor, m_backgroundColor);
 					}
 					cairo_surface_destroy(cairo_surface);
 				}
 			}
-
-			if (pos >= m_ptOffset.y + h)
-				break;
 			pos += H;
 			p = p->next_;
+			if (pos >= m_ptOffset.y + h) // out of the scope of the drawing area
+				break;
 		}
-		cairo_glyph_free(cairo_glyphs);
-		hb_buffer_destroy(hb_buffer);
-		hb_font_destroy(hb_font);
-		cairo_font_face_destroy(cairo_face);
 
 		return 0;
 #if 0
