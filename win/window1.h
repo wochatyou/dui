@@ -35,7 +35,6 @@ public:
 
 	~XWindow1()	{}
 
-	BLFont	m_font;
 	U16*	m_text = (U16*)txt;
 
 	static int ButtonAction(void* obj, U32 uMsg, U64 wParam, U64 lParam)
@@ -111,14 +110,7 @@ public:
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
 		int ret = 0;
-		BLResult blResult;
-
 		InitButtons();
-
-		blResult = m_font.createFromFace(g_fontFace, 15.0f);
-		if (BL_SUCCESS != blResult)
-			return (-1);
-
 		return ret;
 	}
 
@@ -126,7 +118,7 @@ public:
 	{
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
-
+#if 0
 		if (nullptr != m_text)
 		{
 			BLImage img;
@@ -154,6 +146,7 @@ public:
 				}
 			}
 		}
+#endif
 		return 0;
 	}
 

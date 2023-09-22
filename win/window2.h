@@ -33,9 +33,9 @@ class XWindow2 : public XWindowT <XWindow2>
 {
 private:
 	enum {
-		SELECTED_COLOR = 0xFFC6C6C8,
-		HOVERED_COLOR  = 0xFFD9DADC,
-		DEFAULT_COLOR  = 0xFFE5E5E6
+		SELECTED_COLOR = 0xFFC6C6C6,
+		HOVERED_COLOR  = 0xFFDADADA,
+		DEFAULT_COLOR  = 0xFFE5E5E5
 	};
 
 	enum {
@@ -44,8 +44,6 @@ private:
 		ITEM_MARGIN = ((ITEM_HEIGHT - ICON_HEIGHT)>>1)
 	};
 
-	BLFont	m_font0;
-	BLFont	m_font1;
 	int		m_lineHeight0 = 0;
 	int		m_lineHeight1 = 0;
 
@@ -133,7 +131,7 @@ public:
 	int DoCreate(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{ 
 		int ret = 0;
-
+#if 0
 		BLResult blResult = m_font0.createFromFace(g_fontFace, 16.0f);
 		if (BL_SUCCESS != blResult)
 			return (-1);
@@ -148,7 +146,7 @@ public:
 		fm = m_font1.metrics();
 		m_lineHeight1 = (int)(fm.ascent + fm.descent + fm.lineGap);
 		assert(m_lineHeight1 > 0);
-
+#endif
 		LoadChatGroupList();
 
 		return ret; 
@@ -162,99 +160,123 @@ public:
 	int Draw()
 	{
 		U32 color;
-		int dx, dy, pos, W, H;
-		int margin = 0;
+		double R, G, B;
+		U32* crdata;
+		int dx, dy, pos;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
-
-		BLResult blResult;
-		BLImage img;
-
-		margin = (DUI_STATUS_VSCROLL & m_status) ? m_scrollWidth : 0;
+		XChatGroup* p;
+		int margin = (DUI_STATUS_VSCROLL & m_status) ? m_scrollWidth : 0;
+		int W = w - ITEM_MARGIN - ITEM_MARGIN - ICON_HEIGHT - margin;
+		int H = ITEM_HEIGHT;
 
 		dx = ITEM_MARGIN;
-		W = DUI_ALIGN_DEFAULT32(w - ITEM_MARGIN - ITEM_MARGIN - ICON_HEIGHT - margin - 4);
-		blResult = img.create(W, ITEM_HEIGHT, BL_FORMAT_PRGB32);
-		if (BL_SUCCESS == blResult)
+
+		cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, W, H);
+		cairo_status_t cs = cairo_surface_status(cairo_surface);
+		if (CAIRO_STATUS_SUCCESS == cs)
 		{
-			int pos = 0;
-			BLRgba32 selectedColor(SELECTED_COLOR);
-			BLRgba32 hoveredColor(HOVERED_COLOR);
-			BLRgba32 defaultColor(DEFAULT_COLOR);
-			BLRgba32 textColor0(0xFF333333u);
-			BLRgba32 textColor1(0xFF777777u);
-			BLRgba32 textColor2(0xFF555555u);
-
-			BLImageData imgdata = { 0 };
-			BLGlyphBuffer gb;
-			BLTextMetrics tm;
-			BLFontMetrics fm;
-
-			BLContext ctx(img);
-
-			XChatGroup* p = m_chatgroupRoot;
-			while (nullptr != p)
+			cairo_t* cr = cairo_create(cairo_surface);
+			cs = cairo_status(cr);
+			if (CAIRO_STATUS_SUCCESS == cs)
 			{
-				if (pos + ITEM_HEIGHT > m_ptOffset.y)
+				double baseline;
+				cairo_glyph_t* cairo_glyphs;
+				cairo_font_extents_t font_extents;
+
+				assert(nullptr != g_ftFace0);
+				cairo_font_face_t* cairo_face = cairo_ft_font_face_create_for_ft_face(g_ftFace0, 0);
+				assert(nullptr != cairo_face);
+			
+				cairo_set_font_face(cr, cairo_face);
+				cairo_set_font_size(cr, XFONT_SIZE0);
+				cairo_font_extents(cr, &font_extents);
+				baseline = (XFONT_SIZE0 - font_extents.height) * 0.5 + font_extents.ascent;
+				cairo_translate(cr, 0, baseline + 12);
+
+				hb_font_t* hb_font = hb_ft_font_create(g_ftFace0, NULL);
+				assert(nullptr != hb_font);
+				hb_buffer_t* hb_buffer = hb_buffer_create();
+				hb_bool_t hs = hb_buffer_allocation_successful(hb_buffer);
+				if (hs)
 				{
-					if (p == m_chatgroupSelected)
-					{
-						color = SELECTED_COLOR;
-						ctx.fillAll(selectedColor);
-					}
-					else if (p == m_chatgroupHovered)
-					{
-						color = HOVERED_COLOR;
-						ctx.fillAll(hoveredColor);
-					}
-					else
-					{
-						color = DEFAULT_COLOR;
-						ctx.fillAll(defaultColor);
-					}
-					ScreenFillRect(m_screen, w, h, color, w - margin, ITEM_HEIGHT, 0, pos - m_ptOffset.y);
+					unsigned int i, glyphLen;
+					hb_glyph_info_t* hbinfo;
+					hb_glyph_position_t* hbpos;
+					double current_x = 0;
+					double current_y = 0;
 
-					dy = pos - m_ptOffset.y + ITEM_MARGIN;
-					ScreenDrawRectRound(m_screen, w, h, p->icon_, p->w_, p->h_, dx, dy, color, color);
-
-					if (nullptr != p->name_)
+					cairo_glyphs = cairo_glyph_allocate(256);
+					if (NULL != cairo_glyphs)
 					{
-						gb.setUtf16Text((const uint16_t*)p->name_);
-						m_font0.shape(gb);
-						ctx.fillGlyphRun(BLPoint(0, m_lineHeight0), m_font0, gb.glyphRun(), textColor0);
-					}
+						pos = 0;
+						p = m_chatgroupRoot;
+						while (nullptr != p)
+						{
+							if (pos + ITEM_HEIGHT > m_ptOffset.y)
+							{
+								hb_buffer_reset(hb_buffer);
+								hb_buffer_add_utf16(hb_buffer, (const uint16_t*)p->name_, -1, 0, -1);
+								hb_buffer_guess_segment_properties(hb_buffer);
+								/* Shape it! */
+								hb_shape(hb_font, hb_buffer, NULL, 0);
+								/* Get glyph information and positions out of the buffer. */
+								glyphLen = hb_buffer_get_length(hb_buffer);
+								assert(glyphLen < 256);
+								hbinfo = hb_buffer_get_glyph_infos(hb_buffer, NULL);
+								hbpos = hb_buffer_get_glyph_positions(hb_buffer, NULL);
 
-					{
-						const char* str = (const char*)"09:18 AM";
-						gb.setUtf8Text(str);
-						m_font1.shape(gb);
-						m_font1.getTextMetrics(gb, tm);
-						int x = (int)(tm.boundingBox.x1 - tm.boundingBox.x0);
-						ctx.fillGlyphRun(BLPoint(W - x - 16 + margin, m_lineHeight0), m_font1, gb.glyphRun(), textColor1);
-					}
+								if (p == m_chatgroupSelected)
+								{
+									color = SELECTED_COLOR;
+									R = 0.77647; G = R; B = R;
+								}
+								else if (p == m_chatgroupHovered)
+								{
+									color = HOVERED_COLOR;
+									R = 0.8549; G = R; B = R;
+								}
+								else
+								{
+									color = DEFAULT_COLOR;
+									R = 0.8984375; G = 0.89804; B = G;
+								}
+								current_x = 0; current_y = 0;
+								for (i = 0; i < glyphLen; i++)
+								{
+									cairo_glyphs[i].index = hbinfo[i].codepoint;
+									cairo_glyphs[i].x = current_x + hbpos[i].x_offset / 64.;
+									cairo_glyphs[i].y = -(current_y + hbpos[i].y_offset / 64.);
+									current_x += hbpos[i].x_advance / 64.;
+									current_y += hbpos[i].y_advance / 64.;
+								}
+								cairo_set_source_rgba(cr, R, G, B, 1);
+								cairo_paint(cr);
+								cairo_set_source_rgba(cr, 0.3, 0.3, 0.3, 1);
+								cairo_show_glyphs(cr, cairo_glyphs, glyphLen);
 
-					if (nullptr != p->lastmsg_)
-					{
-						gb.setUtf16Text((const uint16_t*)p->lastmsg_);
-						m_font1.shape(gb);
-						ctx.fillGlyphRun(BLPoint(0, ICON_HEIGHT + ITEM_MARGIN), m_font1, gb.glyphRun(), textColor2);
-					}
+								ScreenFillRect(m_screen, w, h, color, w - margin, ITEM_HEIGHT, 0, pos - m_ptOffset.y);
+								dy = pos - m_ptOffset.y + ITEM_MARGIN;
+								ScreenDrawRectRound(m_screen, w, h, p->icon_, p->w_, p->h_, dx, dy, color, color);
 
-					blResult = img.getData(&imgdata);
-					if (BL_SUCCESS == blResult)
-					{
-						ScreenDrawRect(m_screen, w, h, (U32*)imgdata.pixelData, imgdata.size.w, imgdata.size.h, dx + dx + ICON_HEIGHT, pos - m_ptOffset.y);
+								crdata = (U32*)cairo_image_surface_get_data(cairo_surface);
+								ScreenDrawRect(m_screen, w, h, crdata, W, H, dx + dx + ICON_HEIGHT, pos - m_ptOffset.y);
+							}
+							p = p->next_;
+							pos += ITEM_HEIGHT;
+							if (pos >= (m_ptOffset.y + h))
+								break;
+						}
+						cairo_glyph_free(cairo_glyphs);
 					}
-
+					hb_buffer_destroy(hb_buffer);
+					hb_font_destroy(hb_font);
 				}
-
-				p = p->next_;
-				pos += ITEM_HEIGHT;
-				if (pos >= (m_ptOffset.y + h))
-					break;
+				cairo_font_face_destroy(cairo_face);
+				cairo_destroy(cr);
 			}
+			cairo_surface_destroy(cairo_surface);
 		}
-
 		return 0;
 	}
 

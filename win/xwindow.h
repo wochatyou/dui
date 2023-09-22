@@ -79,7 +79,7 @@ private:
 	U32* m_screenBuff = nullptr;
 	U32  m_screenSize = 0;
 
-	RECT m_rectClient;
+	RECT m_rectClient = { 0 };
 	
 	int m_splitterVPos = -1;               // splitter bar position
 	int m_splitterVPosNew = -1;            // internal - new position while moving
@@ -309,17 +309,29 @@ public:
 		ATLASSERT(m_rectClient.right > 0);
 		ATLASSERT(m_rectClient.bottom > 0);
 
+		if (nullptr != m_screenBuff)
+		{
+			VirtualFree(m_screenBuff, 0, MEM_RELEASE);
+			m_screenBuff = nullptr;
+			m_screenSize = 0;
+		}
+
 		W = (U16)(m_rectClient.right - m_rectClient.left);
 		H = (U16)(m_rectClient.bottom - m_rectClient.top);
 
-		m_screenBuff = nullptr;
 		m_screenSize = DUI_ALIGN_PAGE(W * H * sizeof(U32));
 		ATLASSERT(m_screenSize >= (W * H * sizeof(U32)));
 
 		m_screenBuff = (U32*)VirtualAlloc(NULL, m_screenSize, MEM_COMMIT, PAGE_READWRITE);
 		if (nullptr == m_screenBuff)
 		{
-			m_screenSize = 0;
+			m_win0.OnSize(uMsg, wParam, 0, nullptr);
+			m_win1.OnSize(uMsg, wParam, 0, nullptr);
+			m_win2.OnSize(uMsg, wParam, 0, nullptr);
+			m_win3.OnSize(uMsg, wParam, 0, nullptr);
+			m_win4.OnSize(uMsg, wParam, 0, nullptr);
+			m_win5.OnSize(uMsg, wParam, 0, nullptr);
+			Invalidate();
 			return 0;
 		}
 

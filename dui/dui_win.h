@@ -21,7 +21,7 @@
 #define DUI_ALIGN_DEFAULT32(size)   DUI_ALIGN(size, 4)
 #define DUI_ALIGN_DEFAULT64(size)   DUI_ALIGN(size, 8)      /** Default alignment */
 #define DUI_ALIGN_PAGE(size)        DUI_ALIGN(size, 1<<16)
-#define DUI_ALIGN_FREETYPE(size)    DUI_ALIGN(size, 64)    
+#define DUI_ALIGN_TRUETYPE(size)    DUI_ALIGN(size, 64)    
 
 
 int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color);
@@ -279,7 +279,7 @@ public:
     int     m_buttonEndIdx = -1;
     int     m_buttonActiveIdx = -1;
 
-    int     m_scrollWidth = 8; // in pixel
+    const int m_scrollWidth = 8; // in pixel
 
     XPOINT m_ptOffset = { 0 };
     XPOINT m_ptOffsetOld = { 0 };
@@ -651,9 +651,13 @@ public:
         }
 
         m_screen = (U32*)lpData;
-        assert(nullptr != m_screen);
+        if (nullptr == m_screen)
+        {
+            m_area.left = m_area.top = m_area.right = m_area.bottom = 0;
+            m_size = 0;
+        }
 
-        if (nullptr != r)
+        if (nullptr != r && nullptr != m_screen)
         {
             T* pT = static_cast<T*>(this);
             pT->DoSize(uMsg, wParam, lParam, lpData);

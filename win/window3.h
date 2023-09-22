@@ -2,10 +2,6 @@
 #define __WOCHAT_WINDOWS3_H__
 
 #include "dui/dui_win.h"
-#include <harfbuzz/hb.h>
-#include <harfbuzz/hb-ft.h>
-#include <cairo/cairo.h>
-#include <cairo/cairo-ft.h>
 
 uint16_t titlewin3[] = { 0x0044,0x0042,0x0041,0x57f9,0x8bad,0x7fa4,0x0028,0x0032,0x0035,0x0037,0x0029,0x0000 };
 enum 
@@ -32,8 +28,6 @@ private:
 		GAP_RIGHT3 = 10
 	};
 
-	FT_Library m_ftLibrary = nullptr;
-	FT_Face m_ftFace = nullptr;
 
 public:
 	XWindow3()
@@ -119,40 +113,14 @@ public:
 
 	int DoDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
-		assert(m_ftLibrary);
-		assert(m_ftFace);
-
-		FT_Done_Face(m_ftFace);
-		FT_Done_FreeType(m_ftLibrary);
-
 		return 0;
 	}
 
-#define FONT_SIZE 18
 	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
 		FT_Error ft_error;
 
 		InitButtons();
-
-		ft_error = FT_Init_FreeType(&m_ftLibrary);
-		if (ft_error || nullptr == m_ftLibrary)
-			return (-1);
-		
-		ft_error = FT_New_Face(m_ftLibrary, "c:\\windev\\OPlusSans3Light.ttf", 0, &m_ftFace);
-		if (ft_error || nullptr == m_ftFace)
-		{
-			FT_Done_FreeType(m_ftLibrary);
-			return (-2);
-		}
-
-		ft_error = FT_Set_Char_Size(m_ftFace, FONT_SIZE * 64, FONT_SIZE * 64, 0, 0);
-		if (ft_error)
-		{
-			FT_Done_Face(m_ftFace);
-			FT_Done_FreeType(m_ftLibrary);
-			return (-3);
-		}
 
 		return 0;
 	}
@@ -171,7 +139,9 @@ public:
 		int h = m_area.bottom - m_area.top;
 
 		hb_font_t* hb_font;
-		hb_font = hb_ft_font_create(m_ftFace, NULL);
+		assert(nullptr != g_ftFace0);
+
+		hb_font = hb_ft_font_create(g_ftFace0, NULL);
 		hb_buffer_t* hb_buffer = hb_buffer_create();
 		hb_buffer_add_utf16(hb_buffer, (const uint16_t*)titlewin3, -1, 0, -1);
 		hb_buffer_guess_segment_properties(hb_buffer);
@@ -186,11 +156,11 @@ public:
 		W = 4; H = 0;
 		for (i = 0; i < len; i++)
 		{
-			W += (DUI_ALIGN_FREETYPE(pos[i].x_advance) >> 6);
-			H -= (DUI_ALIGN_FREETYPE(pos[i].y_advance) >> 6);
+			W += (DUI_ALIGN_TRUETYPE(pos[i].x_advance) >> 6);
+			H -= (DUI_ALIGN_TRUETYPE(pos[i].y_advance) >> 6);
 		}
 		if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(hb_buffer)))
-			H += (FONT_SIZE + 8);
+			H += (XFONT_SIZE0 + 8);
 
 		cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, W, H);
 		cairo_t* cr = cairo_create(cairo_surface);
@@ -200,19 +170,19 @@ public:
 		cairo_translate(cr, 2, 4);
 		/* Set up cairo font face. */
 		cairo_font_face_t* cairo_face;
-		cairo_face = cairo_ft_font_face_create_for_ft_face(m_ftFace, 0);
+		cairo_face = cairo_ft_font_face_create_for_ft_face(g_ftFace0, 0);
 		cairo_set_font_face(cr, cairo_face);
-		cairo_set_font_size(cr, FONT_SIZE);
+		cairo_set_font_size(cr, XFONT_SIZE0);
 		if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(hb_buffer)))
 		{
 			cairo_font_extents_t font_extents;
 			cairo_font_extents(cr, &font_extents);
-			double baseline = (FONT_SIZE - font_extents.height) * .5 + font_extents.ascent;
+			double baseline = (XFONT_SIZE0 - font_extents.height) * .5 + font_extents.ascent;
 			cairo_translate(cr, 0, baseline);
 		}
 		else
 		{
-			cairo_translate(cr, FONT_SIZE * .5, 0);
+			cairo_translate(cr, XFONT_SIZE0 * .5, 0);
 		}
 		cairo_glyph_t* cairo_glyphs = cairo_glyph_allocate(len);
 

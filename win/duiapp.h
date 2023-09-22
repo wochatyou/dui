@@ -40,12 +40,24 @@
 #include <cassert>
 #include <string>
 
-#include "blend2d/src/blend2d.h"
+#include <harfbuzz/hb.h>
+#include <harfbuzz/hb-ft.h>
+#include <cairo/cairo.h>
+#include <cairo/cairo-ft.h>
+
+//#include "blend2d/src/blend2d.h"
 
 extern UINT				g_Quit;
 extern LONG				g_threadCount;
 extern HINSTANCE		g_hInstance;
-extern BLFontFace		g_fontFace;
+//extern BLFontFace		g_fontFace;
+
+#define XFONT_SIZE0		15
+#define XFONT_SIZE1		13
+
+extern FT_Library		g_ftLibrary;
+extern FT_Face			g_ftFace0;
+extern FT_Face			g_ftFace1;
 
 #endif  /* __DUIAPP_H__ */
 

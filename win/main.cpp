@@ -15,7 +15,11 @@
 LONG 				g_threadCount = 0;
 UINT				g_Quit = 0;
 HINSTANCE			g_hInstance = nullptr;
-BLFontFace			g_fontFace;
+FT_Library			g_ftLibrary = nullptr;
+FT_Face				g_ftFace0 = nullptr;
+FT_Face				g_ftFace1 = nullptr;
+
+//BLFontFace			g_fontFace;
 
 static CAtlWinModule _Module;
 
@@ -169,6 +173,56 @@ static int InitInstance(HINSTANCE hInstance)
 	}
 
 	{
+		FT_Error ft_error;
+		g_ftLibrary = nullptr;
+		g_ftFace0 = nullptr;
+		g_ftFace1 = nullptr;
+
+		ft_error = FT_Init_FreeType(&g_ftLibrary);
+		if (ft_error || nullptr == g_ftLibrary)
+		{
+			MessageBox(NULL, _T("FT_Init_FreeType call is faied!"), _T("Error"), MB_OK);
+			return (-1);
+		}
+
+		ft_error = FT_New_Memory_Face(g_ftLibrary, (const FT_Byte*)fontData, fontSize, 0, &g_ftFace0);
+		if (ft_error || nullptr == g_ftFace0)
+		{
+			FT_Done_FreeType(g_ftLibrary);
+			MessageBox(NULL, _T("FT_New_Memory_Face call is faied!"), _T("Error"), MB_OK);
+			return (-2);
+		}
+
+		ft_error = FT_Set_Char_Size(g_ftFace0, XFONT_SIZE0 * 64, XFONT_SIZE0 * 64, 0, 0);
+		if (ft_error)
+		{
+			MessageBox(NULL, _T("FT_Set_Char_Size call is faied!"), _T("Error"), MB_OK);
+			FT_Done_Face(g_ftFace0);
+			FT_Done_FreeType(g_ftLibrary);
+			return (-3);
+		}
+		ft_error = FT_New_Memory_Face(g_ftLibrary, (const FT_Byte*)fontData, fontSize, 0, &g_ftFace1);
+		if (ft_error || nullptr == g_ftFace1)
+		{
+			FT_Done_Face(g_ftFace0);
+			FT_Done_FreeType(g_ftLibrary);
+			MessageBox(NULL, _T("FT_New_Memory_Face call is faied!"), _T("Error"), MB_OK);
+			return (-2);
+		}
+
+		ft_error = FT_Set_Char_Size(g_ftFace1, XFONT_SIZE1 * 64, XFONT_SIZE1 * 64, 0, 0);
+		if (ft_error)
+		{
+			MessageBox(NULL, _T("FT_Set_Char_Size call is faied!"), _T("Error"), MB_OK);
+			FT_Done_Face(g_ftFace0);
+			FT_Done_Face(g_ftFace1);
+			FT_Done_FreeType(g_ftLibrary);
+			return (-3);
+		}
+	}
+
+#if 0
+	{
 		BLResult blRet;
 		BLFontData fd;
 		BLString fontName;
@@ -194,7 +248,7 @@ static int InitInstance(HINSTANCE hInstance)
 		fontName = g_fontFace.fullName();
 		fontName = g_fontFace.subfamilyName();
 	}
-
+#endif
 
 	return iRet;
 }
@@ -205,6 +259,18 @@ static void ExitInstance(HINSTANCE hInstance)
 
 	// tell all threads to quit
 	InterlockedIncrement(&g_Quit);
+
+	if (nullptr != g_ftFace0)
+	{
+		FT_Done_Face(g_ftFace0);
+		g_ftFace0 = nullptr;
+	}
+
+	if (nullptr != g_ftLibrary)
+	{
+		FT_Done_FreeType(g_ftLibrary);
+		g_ftLibrary = nullptr;
+	}
 
 	// wait for all threads to quit gracefully
 	tries = 10;
