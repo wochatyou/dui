@@ -133,6 +133,7 @@ public:
 
 	int Draw()
 	{
+#if 0
 		U32 len;
 		int i, W, H;
 		int w = m_area.right - m_area.left;
@@ -210,7 +211,7 @@ public:
 		cairo_surface_destroy(cairo_surface);
 		hb_buffer_destroy(hb_buffer);
 		hb_font_destroy(hb_font);
-
+#endif
 		return 0;
 	}
 

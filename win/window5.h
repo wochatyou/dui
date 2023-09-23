@@ -73,14 +73,13 @@ private:
 
 public:
 	XEditBox m_editBox;
-	HCURSOR m_hCursorIBeam = nullptr;
 
 	XWindow5()
 	{
 		m_backgroundColor = 0xFFFFFFFF;
 		m_buttonStartIdx = XWIN5_BUTTON_EMOJI;
 		m_buttonEndIdx = XWIN5_BUTTON_HINT;
-		m_property |= (DUI_PROP_MOVEWIN | DUI_PROP_HANDLETIMER);
+		m_property |= (DUI_PROP_MOVEWIN | DUI_PROP_HANDLETIMER | DUI_PROP_HANDLEKEYBOARD);
 		m_message = WM_WIN5_MESSAGE;
 
 		InitButtons();
@@ -301,8 +300,6 @@ public:
 
 	int Draw()
 	{
-		U32* editScreenBuff = nullptr;
-		XRECT r;
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 
@@ -331,12 +328,15 @@ public:
 
 		InitButtons();
 
-		if (false == CreateEditWindow())
-			return (-1);
+		ret = m_editBox.Init();
 
-		m_hCursorIBeam = ::LoadCursor(NULL, IDC_IBEAM);
-		if (nullptr == m_hCursorIBeam)
-			return (-2);
+		return ret;
+	}
+
+	int DoDestroy(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		m_editBox.Term();
+
 		return 0;
 	}
 
@@ -372,7 +372,7 @@ public:
 
 		if (XWinPointInRect(xPos, yPos, &m_editBox))
 		{
-			::SetCursor(m_hCursorIBeam);
+			SetCursorIBeam();
 		}
 
 		return 0; 
@@ -424,6 +424,59 @@ public:
 
     	return DUI_STATUS_NEEDRAW;
     } 
+
+	int DoChar(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) 
+	{ 
+		int r = DUI_STATUS_NODRAW;
+
+		U16 charCode = static_cast<U16>(wParam);
+
+		bool isFocused = m_editBox.IsFocused();
+		if (isFocused)
+		{
+			m_editBox.OnChar(charCode);
+			r = DUI_STATUS_NEEDRAW;
+		}
+		return r; 
+	}
+
+	int DoKeyPress(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) 
+	{ 
+		int r = DUI_STATUS_NODRAW;
+
+		U32 keyCode = static_cast<U32>(wParam);
+
+		bool heldShift = (GetKeyState(VK_SHIFT) & 0x80) != 0;
+		bool heldControl = (GetKeyState(VK_CONTROL) & 0x80) != 0;
+
+		switch (keyCode)
+		{
+		case VK_RETURN:
+		case VK_BACK:
+		case VK_DELETE:
+		case VK_TAB:
+		case VK_LEFT:
+			m_editBox.MoveCursorLR(-1);
+			r = DUI_STATUS_NEEDRAW;
+			break;
+		case VK_RIGHT:
+			m_editBox.MoveCursorLR(1);
+			r = DUI_STATUS_NEEDRAW;
+			break;
+		case VK_UP:
+		case VK_DOWN:
+		case VK_HOME:
+		case VK_END:
+		case VK_INSERT:
+		case 'C':
+		case 'X':
+		case 'A':
+		case 'V':
+		default:
+			break;
+		}
+		return r;
+	}
 
 };
 

@@ -23,6 +23,8 @@
 #define DUI_ALIGN_PAGE(size)        DUI_ALIGN(size, 1<<16)
 #define DUI_ALIGN_TRUETYPE(size)    DUI_ALIGN(size, 64)    
 
+#define WM_DUI_USER                         0x0400
+#define WM_REDRAW_WINDOW                    (WM_DUI_USER + 300)
 
 int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color);
 
@@ -35,6 +37,11 @@ int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, 
 int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color0, uint32_t color1);
 
 int ScreenFillRectRound(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy, uint32_t c1, uint32_t c2);
+
+int SetCursorHand();
+int SetCursorIBeam();
+
+typedef U32(*ThreadFunc)(void* lpData);
 
 
 #ifdef _MSC_VER
@@ -109,7 +116,7 @@ typedef struct XButton
 // determin if one object is hitted
 #define XWinPointInRect(x, y, OBJ)      (((x) >= ((OBJ)->left)) && ((x) < ((OBJ)->right)) && ((y) >= ((OBJ)->top)) && ((y) < ((OBJ)->bottom)))
 
-#define DUI_MAX_EDITSTRING      (1<<10)     // maximu input string
+#define DUI_MAX_EDITSTRING          (1<<16)     // maximu input string
 
 // We don't use an enum so we can build even with conflicting symbols (if another user of stb_textedit.h leak their STB_TEXTEDIT_K_* symbols)
 #define XSTB_TEXTEDIT_K_LEFT         0x200000 // keyboard input to move cursor left
@@ -155,73 +162,283 @@ public:
     int top;
     int right;
     int bottom;
-    int _cursorX;
-    int _cursorY;
-    int _cursorW;
-    int _cursorH;
-    U32 _cursorColor;
-    U32 _status;
-    U32 _backgroundColor;
-    U16 _text[DUI_MAX_EDITSTRING] = { 0 };
-    U32* _buffer;
-    U32  _size;
+    int cursorW;
+    int cursorH;
+    U32 cursorColor;
+    U32 status;
+    U32 backgroundColor;
+    U16 cursorChar = 0;
+    U16 textChar[DUI_MAX_EDITSTRING + 1] = { 0 };
+    //U16 textWidth[DUI_MAX_EDITSTRING + 1] = { 0 };
+    U32* buffer;
+    U32  size;
+
+    // cairo/harfbuzz issue to cache to speed up
+    cairo_font_extents_t m_font_extents = { 0 };
+    cairo_glyph_t* m_cairo_glyphs = nullptr;
+    cairo_font_face_t* m_cairo_face = nullptr;
+    hb_font_t* m_hb_font = nullptr;
+    hb_buffer_t* m_hb_buffer = nullptr;
+    int m_lineHeight;
 
     XEditBox()
     {
-        _status = XEDIT_STATUS_NONE;
-        _cursorX = _cursorY = 4;
-        _cursorW = 1;
-        _cursorH = 22;
-        _buffer = nullptr;
-        _size = 0;
-        _backgroundColor = 0xFFFFFFFF;
-        _cursorColor = 0xFF000000;
+        status = XEDIT_STATUS_NONE;
+        cursorW = 1;
+        cursorH = 22;
+        buffer = nullptr;
+        size = 0;
+        backgroundColor = 0xFFFFFFFF;
+        cursorColor = 0xFF000000;
+        textChar[0] = 0;
+    }
+
+    int Init()
+    {
+        hb_bool_t hs = 0;
+        assert(nullptr == m_cairo_glyphs);
+        m_cairo_glyphs = cairo_glyph_allocate(1024);
+        if (nullptr == m_cairo_glyphs)
+            return(-1);
+
+        assert(nullptr != g_ftFace0);
+        assert(nullptr == m_cairo_face);
+        m_cairo_face = cairo_ft_font_face_create_for_ft_face(g_ftFace0, 0);
+        if (nullptr == m_cairo_face)
+        {
+            cairo_glyph_free(m_cairo_glyphs);
+            m_cairo_glyphs = nullptr;
+            return (-2);
+        }
+
+        assert(nullptr == m_hb_font);
+        m_hb_font = hb_ft_font_create(g_ftFace0, NULL);
+        if (nullptr == m_hb_font)
+        {
+            cairo_glyph_free(m_cairo_glyphs);
+            m_cairo_glyphs = nullptr;
+            cairo_font_face_destroy(m_cairo_face);
+            m_cairo_face = nullptr;
+            return (-3);
+        }
+
+        assert(nullptr == m_hb_buffer);
+        m_hb_buffer = hb_buffer_create();
+        hs = hb_buffer_allocation_successful(m_hb_buffer);
+        if (0 == hs || nullptr == m_hb_buffer)
+        {
+            cairo_glyph_free(m_cairo_glyphs);
+            m_cairo_glyphs = nullptr;
+            cairo_font_face_destroy(m_cairo_face);
+            m_cairo_face = nullptr;
+
+            hb_font_destroy(m_hb_font);
+            m_hb_font = nullptr;
+            return (-4);
+        }
+
+        // detect the line height
+        m_lineHeight = 0;
+        cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 64, 64);
+        cairo_status_t cs = cairo_surface_status(cairo_surface);
+        if (CAIRO_STATUS_SUCCESS == cs)
+        {
+            cairo_t* cr = cairo_create(cairo_surface);
+            cs = cairo_status(cr);
+            if (CAIRO_STATUS_SUCCESS == cs)
+            {
+                cairo_set_font_face(cr, m_cairo_face);
+                cairo_set_font_size(cr, XFONT_SIZE0);
+                cairo_font_extents(cr, &m_font_extents);
+
+                m_lineHeight = (int)m_font_extents.height;
+                cairo_destroy(cr);
+            }
+            cairo_surface_destroy(cairo_surface);
+        }
+
+        if (0 == m_lineHeight)
+            return(-1);
+
+        cursorW = 1;
+        cursorH = m_lineHeight;
+
+        return 0;
+    }
+
+    void Term()
+    {
+        assert(nullptr != m_cairo_glyphs);
+        cairo_glyph_free(m_cairo_glyphs);
+        m_cairo_glyphs = nullptr;
+
+        assert(nullptr != m_hb_buffer);
+        hb_buffer_destroy(m_hb_buffer);
+        m_hb_buffer = nullptr;
+
+        assert(nullptr != m_hb_font);
+        hb_font_destroy(m_hb_font);
+        m_hb_font = nullptr;
+
+        assert(nullptr != m_cairo_face);
+        cairo_font_face_destroy(m_cairo_face);
+        m_cairo_face = nullptr;
     }
 
     bool IsFocused()
     {
-        return (_status & XEDIT_STATUS_FOCUS);
+        return (status & XEDIT_STATUS_FOCUS);
+    }
+
+    int MoveCursorLR(int direction)
+    {
+        if (direction > 0)
+            cursorChar++;
+        else if (direction < 0)
+        {
+            if (cursorChar > 0)
+                cursorChar--;
+        }
+
+        return 0;
     }
 
     void ClearFocusedStatus()
     {
-        _status &= ~(XEDIT_STATUS_FOCUS | XEDIT_STATUS_CARET);
+        status &= ~(XEDIT_STATUS_FOCUS | XEDIT_STATUS_CARET);
     }
 
     void SetFocusedStatus()
     {
-        _status |= XEDIT_STATUS_FOCUS;
+        status |= (XEDIT_STATUS_FOCUS | XEDIT_STATUS_CARET);
     }
 
     void FlipCaret()
     {
-        if (XEDIT_STATUS_CARET & _status)
+        if (XEDIT_STATUS_CARET & status)
         {
-            _status &= ~XEDIT_STATUS_CARET;
+            status &= ~XEDIT_STATUS_CARET;
         }
         else
         {
-            _status |= XEDIT_STATUS_CARET;
+            status |= XEDIT_STATUS_CARET;
         }
     }
 
     void AttachScreenBuffer(U32* buf, U32 size)
     {
-        _buffer = buf;
-        _size = size;
+        buffer = buf;
+        size = size;
+    }
+
+    int OnChar(U16 charcode)
+    {
+        U16 charNum = textChar[0];
+        if (charNum < DUI_MAX_EDITSTRING)
+        {
+            U32 i, glyphLen;
+            U16* pTxt;
+            hb_glyph_info_t* hbinfo;
+            hb_glyph_position_t* hbpos;
+
+            charNum++;
+            textChar[0] = charNum;
+            cursorChar++;
+            textChar[charNum] = charcode;
+        }
+
+        return 0;
     }
 
     int Draw()
     {
-        if(0 == (_status & XEDIT_STATUS_FOCUS))
-            return 0;
+        int cursorX = 0, cursorY = 0, dx;
+        U32 i, glyphLen, w, h, charWidth, charHeight, xOffset, yOffset;
+        U32* crdata;
+        double baseline, current_x, current_y;
+        double R = 1, G = 1, B = 1;
+        hb_glyph_info_t* hbinfo;
+        hb_glyph_position_t* hbpos;
+        U16 strLen = textChar[0];
+        U16* utf16String = textChar + 1; // the first 2 bytes are the string length
 
-        ScreenClear(_buffer, _size, _backgroundColor);
-       
+        ScreenClear(buffer, size, backgroundColor);
 
-        if(XEDIT_STATUS_CARET & _status)
+        w = 0; h = m_lineHeight;
+        hb_buffer_reset(m_hb_buffer);
+        hb_buffer_add_utf16(m_hb_buffer, (const uint16_t*)utf16String, strLen, 0, strLen);
+        hb_buffer_guess_segment_properties(m_hb_buffer);
+        /* Shape it! */
+        hb_shape(m_hb_font, m_hb_buffer, NULL, 0);
+        /* Get glyph information and positions out of the buffer. */
+        glyphLen = hb_buffer_get_length(m_hb_buffer);
+        if (glyphLen > 0)
         {
-            ScreenFillRect(_buffer, right - left, bottom - top, _cursorColor, _cursorW, _cursorH, _cursorX, _cursorY);
+            U16 startChar = 0, endChar = 0;
+            hbinfo = hb_buffer_get_glyph_infos(m_hb_buffer, NULL);
+            hbpos = hb_buffer_get_glyph_positions(m_hb_buffer, NULL);
+
+            if (glyphLen > 6)
+            {
+                startChar = 2; endChar = 5;
+            }
+
+            current_x = current_y = 0;
+            w = 0;
+            for (i = 0; i < glyphLen; i++)
+            {
+                m_cairo_glyphs[i].index = hbinfo[i].codepoint;
+
+                charWidth  = (DUI_ALIGN_TRUETYPE(hbpos[i].x_advance) >> 6) + 1;
+                charHeight = (DUI_ALIGN_TRUETYPE(hbpos[i].y_advance) >> 6);
+                xOffset    = (DUI_ALIGN_TRUETYPE(hbpos[i].x_offset) >> 6);
+                yOffset    = (DUI_ALIGN_TRUETYPE(hbpos[i].y_offset) >> 6);
+
+                m_cairo_glyphs[i].x = current_x + xOffset;
+                m_cairo_glyphs[i].y = -(current_y + yOffset);
+                current_x += charWidth;
+                current_y += charHeight;
+                w += charWidth;
+                if (i <= cursorChar)
+                    cursorX += charWidth;
+            }
+            h = m_lineHeight << 1;
+            w += 20;
+            cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+            cairo_status_t cs = cairo_surface_status(cairo_surface);
+            if (CAIRO_STATUS_SUCCESS == cs)
+            {
+                cairo_t* cr = cairo_create(cairo_surface);
+                cs = cairo_status(cr);
+                if (CAIRO_STATUS_SUCCESS == cs)
+                {
+                    cairo_set_font_face(cr, m_cairo_face);
+                    cairo_set_font_size(cr, XFONT_SIZE0);
+                    cairo_font_extents(cr, &m_font_extents);
+                    baseline = (XFONT_SIZE0 - m_font_extents.height) * 0.5 + m_font_extents.ascent + 6;
+                    cairo_set_source_rgba(cr, R, G, B, 1);
+                    cairo_paint(cr);
+                    B = (double)(0x97) / (double)(0xFF); G = (double)(0xC6) / (double)(0xFF); R = double(0xEB) / (double)(0xFF);
+                    cairo_set_source_rgba(cr, R, G, B, 1);
+                    cairo_rectangle(cr, 0, 0, 100, 30);
+                    cairo_fill(cr);
+                    cairo_set_source_rgba(cr, 0.333, 0.333, 0.333, 1);
+                    cairo_translate(cr, 0, baseline);
+                    cairo_set_font_size(cr, XFONT_SIZE0);
+                    cairo_show_glyphs(cr, m_cairo_glyphs, glyphLen);
+                    crdata = (U32*)cairo_image_surface_get_data(cairo_surface);
+                    ScreenDrawRect(buffer, right - left, bottom - top, crdata, w, h, 0, 0);
+
+                    cairo_destroy(cr);
+                }
+                cairo_surface_destroy(cairo_surface);
+            }
+        }
+
+        if (XEDIT_STATUS_CARET & status)
+        {
+            dx = (cursorX > 0) ? cursorX - 1: 0;
+            ScreenFillRect(buffer, right - left, bottom - top, cursorColor, cursorW, cursorH-2, dx, 2);
         }
 
         return 0;
@@ -241,14 +458,15 @@ enum
 
 enum
 {
-    DUI_PROP_NONE         = 0x00,   // None Properties
-    DUI_PROP_MOVEWIN      = 0x01,   // Move the whole window while LButton is pressed
-    DUI_PROP_BTNACTIVE    = 0x02,   // no active button on this virutal window
-    DUI_PROP_HASVSCROLL   = 0x04,    // have vertical scroll bar
-    DUI_PROP_HASHSCROLL   = 0x08,
-    DUI_PROP_HANDLEVWHEEL = 0x10,   // does this window need to handle mouse wheel?
-    DUI_PROP_HANDLEHWHEEL = 0x20,
-    DUI_PROP_HANDLETIMER  = 0x40
+    DUI_PROP_NONE             = 0x00,   // None Properties
+    DUI_PROP_MOVEWIN          = 0x01,   // Move the whole window while LButton is pressed
+    DUI_PROP_BTNACTIVE        = 0x02,   // no active button on this virutal window
+    DUI_PROP_HASVSCROLL       = 0x04,    // have vertical scroll bar
+    DUI_PROP_HASHSCROLL       = 0x08,
+    DUI_PROP_HANDLEVWHEEL     = 0x10,   // does this window need to handle mouse wheel?
+    DUI_PROP_HANDLEHWHEEL     = 0x20,
+    DUI_PROP_HANDLETIMER      = 0x40,
+    DUI_PROP_HANDLEKEYBOARD   = 0x80
 };
 
 enum
@@ -278,6 +496,8 @@ public:
     int     m_buttonStartIdx = 0;
     int     m_buttonEndIdx = -1;
     int     m_buttonActiveIdx = -1;
+
+    bool  m_cursorNormal = true;
 
     const int m_scrollWidth = 8; // in pixel
 
@@ -408,6 +628,18 @@ public:
     {
         PostWindowMessage(uMsg, wParam, lParam);
         return 0;
+    }
+
+    int CreatePlatformThread(ThreadFunc threadfunc, void* udata)
+    {
+        int ret = 0;
+#ifdef _WIN32
+        DWORD dwThreadID;
+        HANDLE hThread = ::CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)threadfunc, udata, 0, &dwThreadID);
+        if (nullptr == hThread)
+            ret = 1;
+#endif
+        return ret;
     }
 
     int ClearButtonStatus() 
@@ -605,8 +837,8 @@ public:
                 thumb_width = m_scrollWidth - 2;
                 thumb_start = (vOffset * h) / vHeight;
                 thumb_height = (h * h) / vHeight;
-                if(thumb_height < 16)
-                    thumb_height = 16; // we keep the thumb mini size to 16 pixels
+                if(thumb_height < 32)
+                    thumb_height = 32; // we keep the thumb mini size to 32 pixels
 
                 // Draw the vertical scroll bar
                 ScreenFillRect(m_screen, w, h, m_scrollbarColor, m_scrollWidth, h, w - m_scrollWidth, 0);
@@ -829,10 +1061,13 @@ public:
                         button = &m_button[hit];
                         if (0 == (XBUTTON_PROP_STATIC & button->property)) // it is not a static button
                         {
-                            SetCursor(m_cursorHand);
+                            SetCursorHand();
+                            m_cursorNormal = false;
                             button->state = XBUTTON_STATE_HOVERED;
                             r0 = DUI_STATUS_NEEDRAW;
                         }
+                        else
+                            m_cursorNormal = true;
                     }
                 }
             }
@@ -988,10 +1223,13 @@ public:
                 button = &m_button[hit];
                 if (0 == (XBUTTON_PROP_STATIC & button->property)) // it is not a static button
                 {
-                    SetCursor(m_cursorHand);
+                    SetCursorHand();
+                    m_cursorNormal = false;
                     button->state = XBUTTON_STATE_PRESSED;
                     r0 = DUI_STATUS_NEEDRAW;
                 }
+                else
+                    m_cursorNormal = true;
             }
             else
             {   // if the mouse does not hit the button, we can move the whole real window
@@ -1085,7 +1323,8 @@ public:
                 button = &m_button[hit];
                 if (0 == (XBUTTON_PROP_STATIC & button->property)) // it is not a static button
                 {
-                    SetCursor(m_cursorHand);
+                    SetCursorHand();
+                    m_cursorNormal = false;
                     if (m_buttonActiveIdx >= m_buttonStartIdx)
                         m_button[m_buttonActiveIdx].state = XBUTTON_STATE_NORMAL;
 
@@ -1105,6 +1344,8 @@ public:
                     if (nullptr != button->pfAction)
                         button->pfAction(this, m_message, (WPARAM)hit , 0);
                 }
+                else 
+                    m_cursorNormal = true;
             }
         }
 
@@ -1172,13 +1413,44 @@ public:
         return ret;
     }
 
-    int DoSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
+    int DoSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return (m_cursorNormal)? 0 : 1; }
     int OnSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr)
     {
         T* pT = static_cast<T*>(this);
         int ret = pT->DoSetCursor(uMsg, xPos, yPos, lpData);
         return ret;
     }
+
+    int DoChar(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+    int OnChar(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+    {
+        int r = DUI_STATUS_NODRAW;
+        if (DUI_PROP_HANDLEKEYBOARD & m_property)
+        {
+            T* pT = static_cast<T*>(this);
+            r = pT->DoChar(uMsg, wParam, lParam, lpData);
+            if (DUI_STATUS_NODRAW != r)
+                m_status |= DUI_STATUS_NEEDRAW;
+        }
+
+        return r;
+    }
+
+    int DoKeyPress(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+    int OnKeyPress(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+    {
+        int r = DUI_STATUS_NODRAW;
+        if (DUI_PROP_HANDLEKEYBOARD & m_property)
+        {
+            T* pT = static_cast<T*>(this);
+            r = pT->DoKeyPress(uMsg, wParam, lParam, lpData);
+            if (DUI_STATUS_NODRAW != r)
+                m_status |= DUI_STATUS_NEEDRAW;
+        }
+
+        return r;
+    }
+
 
 };
 

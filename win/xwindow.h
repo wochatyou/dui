@@ -43,16 +43,6 @@
 *************************************************************************************************
 */
 
-template <class T> 
-void SafeRelease(T** ppT)
-{
-	if (nullptr != *ppT)
-	{
-		(*ppT)->Release();
-		*ppT = nullptr;
-	}
-}
-
 // Splitter extended styles
 #define SPLIT_PROPORTIONAL		0x00000001
 #define SPLIT_NONINTERACTIVE	0x00000002
@@ -103,9 +93,6 @@ private:
 	int m_splitterHPosfix0 = XWIN1_HEIGHT;
 	int m_splitterHPosfix1 = XWIN3_HEIGHT;
 
-	HCURSOR m_hCursorWE = nullptr;
-	HCURSOR m_hCursorNS = nullptr;
-
 	UINT m_nDPI = 96;
 
 	DWORD m_dwExtendedStyle = (SPLIT_LEFTALIGNED | SPLIT_BOTTOMLIGNED);    // splitter specific extended styles
@@ -123,7 +110,6 @@ private:
 	U32 m4 = 0;
 	U32 m5 = 0;
 
-	ID2D1Factory*          m_pD2DFactory = nullptr;
 	ID2D1HwndRenderTarget* m_pD2DRenderTarget = nullptr;
 	ID2D1Bitmap*           m_pixelBitmap = nullptr;
 
@@ -160,20 +146,65 @@ public:
 		MESSAGE_HANDLER(WM_LBUTTONDOWN, OnLButtonDown)
 		MESSAGE_HANDLER(WM_LBUTTONUP, OnLButtonUp)
 		MESSAGE_HANDLER(WM_LBUTTONDBLCLK, OnLButtonDoubleClick)
+		MESSAGE_HANDLER(WM_WIN0_MESSAGE, OnWin0Message)
+		MESSAGE_HANDLER(WM_WIN1_MESSAGE, OnWin1Message)
+		MESSAGE_HANDLER(WM_WIN2_MESSAGE, OnWin2Message)
+		MESSAGE_HANDLER(WM_WIN3_MESSAGE, OnWin3Message)
+		MESSAGE_HANDLER(WM_WIN4_MESSAGE, OnWin4Message)
+		MESSAGE_HANDLER(WM_WIN5_MESSAGE, OnWin5Message)
 		MESSAGE_HANDLER(WM_CAPTURECHANGED, OnCaptureChanged)
 		MESSAGE_HANDLER(WM_KEYDOWN, OnKeyDown)
+		MESSAGE_HANDLER(WM_CHAR, OnChar)
 		MESSAGE_HANDLER(WM_GETMINMAXINFO, OnGetMinMaxInfo)
 		MESSAGE_HANDLER(WM_SIZE, OnSize)
 		MESSAGE_HANDLER(WM_SETCURSOR, OnSetCursor)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_MOUSEACTIVATE, OnMouseActivate)
-		MESSAGE_HANDLER(WM_SETTINGCHANGE, OnSettingChange)
+		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
+		MESSAGE_HANDLER(WM_REDRAW_WINDOW, OnRedrawWindow)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 	END_MSG_MAP()
 
 	LRESULT OnEraseBkgnd(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
 	{
+		return 0; // don't want flicker
+	}
+
+	LRESULT OnWin0Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		return 0; 
+	}
+
+	LRESULT OnWin1Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		return 0;
+	}
+
+	LRESULT OnWin2Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		return 0;
+	}
+
+	LRESULT OnWin3Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		return 0;
+	}
+
+	LRESULT OnWin4Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		return 0;
+	}
+
+	LRESULT OnWin5Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		return 0;
+	}
+
+	LRESULT OnRedrawWindow(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+	{
+		Invalidate();
+		//UpdateWindow();
 		return 0; // don't want flicker
 	}
 
@@ -190,7 +221,6 @@ public:
 
 		SafeRelease(&m_pixelBitmap);
 		SafeRelease(&m_pD2DRenderTarget);
-		SafeRelease(&m_pD2DFactory);
 
 		PostQuitMessage(0);
 
@@ -202,24 +232,6 @@ public:
 		HRESULT hr;
 		int r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0;
 
-		m_hCursorWE = ::LoadCursor(NULL, IDC_SIZEWE);
-		m_hCursorNS = ::LoadCursor(NULL, IDC_SIZENS);
-
-		if(NULL == m_hCursorWE || NULL == m_hCursorNS)
-		{
-			MessageBox(_T("The calling of LoadCursor() is failed"), _T("DUI Error"), MB_OK);
-			PostMessage(WM_CLOSE);
-			return 0;
-		}
-
-		m_pD2DFactory = nullptr;
-		hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &m_pD2DFactory);
-		if (S_OK != hr || nullptr == m_pD2DFactory)
-		{
-			MessageBox(_T("The calling of D2D1CreateFactory() is failed"), _T("DUI Error"), MB_OK);
-			PostMessage(WM_CLOSE);
-			return 0;
-		}
 		m_nDPI = GetDpiForWindow(m_hWnd);
 		
 		r0 = m_win0.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
@@ -600,12 +612,12 @@ public:
 			switch (mode)
 			{
 			case DrapMode::dragModeV:
-				ATLASSERT(nullptr != m_hCursorWE);
-				::SetCursor(m_hCursorWE);
+				ATLASSERT(nullptr != g_hCursorWE);
+				::SetCursor(g_hCursorWE);
 				break;
 			case DrapMode::dragModeH:
-				ATLASSERT(nullptr != m_hCursorNS);
-				::SetCursor(m_hCursorNS);
+				ATLASSERT(nullptr != g_hCursorNS);
+				::SetCursor(g_hCursorNS);
 				break;
 			default:
 				break;
@@ -641,14 +653,14 @@ public:
 			case DrapMode::dragModeV:
 				m_splitterVPosNew = m_splitterVPos;
 				m_cxDragOffset = xPos - m_splitterVPos;
-				ATLASSERT(nullptr != m_hCursorWE);
-				::SetCursor(m_hCursorWE);
+				ATLASSERT(nullptr != g_hCursorWE);
+				::SetCursor(g_hCursorWE);
 				break;
 			case DrapMode::dragModeH:
 				m_splitterHPosNew = m_splitterHPos;
 				m_cyDragOffset = yPos - m_splitterHPos;
-				ATLASSERT(nullptr != m_hCursorNS);
-				::SetCursor(m_hCursorNS);
+				ATLASSERT(nullptr != g_hCursorNS);
+				::SetCursor(g_hCursorNS);
 				break;
 			default:
 				break;
@@ -773,7 +785,21 @@ public:
 		return 0;
 	}
 
-	LRESULT OnKeyDown(UINT /*uMsg*/, WPARAM wParam, LPARAM /*lParam*/, BOOL& bHandled)
+	LRESULT OnChar(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	{
+		int r0 = m_win0.OnChar(uMsg, wParam, lParam);
+		int r1 = m_win1.OnChar(uMsg, wParam, lParam);
+		int r2 = m_win2.OnChar(uMsg, wParam, lParam);
+		int r3 = m_win3.OnChar(uMsg, wParam, lParam);
+		int r4 = m_win4.OnChar(uMsg, wParam, lParam);
+		int r5 = m_win5.OnChar(uMsg, wParam, lParam);
+
+		if (r0 || r1 || r2 || r3 || r4 || r5)
+			Invalidate();
+		return 0;
+	}
+
+	LRESULT OnKeyDown(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
 		if(::GetCapture() == m_hWnd)
 		{
@@ -827,7 +853,15 @@ public:
 		}
 		else
 		{
-			bHandled = FALSE;
+			int r0 = m_win0.OnKeyPress(uMsg, wParam, lParam);
+			int r1 = m_win1.OnKeyPress(uMsg, wParam, lParam);
+			int r2 = m_win2.OnKeyPress(uMsg, wParam, lParam);
+			int r3 = m_win3.OnKeyPress(uMsg, wParam, lParam);
+			int r4 = m_win4.OnKeyPress(uMsg, wParam, lParam);
+			int r5 = m_win5.OnKeyPress(uMsg, wParam, lParam);
+
+			if (r0 || r1 || r2 || r3 || r4 || r5)
+				Invalidate();
 		}
 
 		return 0;
@@ -901,9 +935,9 @@ public:
 			D2D1_HWND_RENDER_TARGET_PROPERTIES hwndRenderTragetproperties
 				= D2D1::HwndRenderTargetProperties(m_hWnd, D2D1::SizeU(m_rectClient.right - m_rectClient.left, m_rectClient.bottom - m_rectClient.top));
 
-			ATLASSERT(nullptr != m_pD2DFactory);
+			ATLASSERT(nullptr != g_pD2DFactory);
 
-			hr = m_pD2DFactory->CreateHwndRenderTarget(renderTargetProperties, hwndRenderTragetproperties, &m_pD2DRenderTarget);
+			hr = g_pD2DFactory->CreateHwndRenderTarget(renderTargetProperties, hwndRenderTragetproperties, &m_pD2DRenderTarget);
 			if (S_OK == hr && nullptr != m_pD2DRenderTarget)
 			{
 				U32 pixel[1] = { 0xFFEEEEEE };

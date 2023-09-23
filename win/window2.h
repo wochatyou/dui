@@ -211,6 +211,7 @@ public:
 		cairo_glyph_free(m_cairo_glyphs);
 		m_cairo_glyphs = nullptr;
 
+
 		assert(nullptr != m_hb_buffer);
 		hb_buffer_destroy(m_hb_buffer);
 		m_hb_buffer = nullptr;
@@ -222,6 +223,10 @@ public:
 		assert(nullptr != m_hb_font1);
 		hb_font_destroy(m_hb_font1);
 		m_hb_font1 = nullptr;
+
+		assert(nullptr != m_cairo_face);
+		cairo_font_face_destroy(m_cairo_face);
+		m_cairo_face = nullptr;
 
 		return 0;
 	}
@@ -390,7 +395,6 @@ public:
 			}
 			cairo_surface_destroy(cairo_surface);
 		}
-
 		return 0;
 	}
 

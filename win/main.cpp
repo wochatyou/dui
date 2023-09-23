@@ -3,7 +3,9 @@
 #include "xbitmapdata.h"
 #include "resource.h"
 #include "xwindef.h"
+#include "xwinlogin.h"
 #include "xwindow.h"
+
 
 #if !defined(_WIN64)
 #error DUIAPP can only compiled in X64 mode
@@ -18,8 +20,13 @@ HINSTANCE			g_hInstance = nullptr;
 FT_Library			g_ftLibrary = nullptr;
 FT_Face				g_ftFace0 = nullptr;
 FT_Face				g_ftFace1 = nullptr;
+ID2D1Factory*       g_pD2DFactory = nullptr;
 
-//BLFontFace			g_fontFace;
+HCURSOR g_hCursorWE    = nullptr;
+HCURSOR g_hCursorNS    = nullptr;
+HCURSOR g_hCursorHand  = nullptr;
+HCURSOR g_hCursorIBeam = nullptr;
+
 
 static CAtlWinModule _Module;
 
@@ -149,6 +156,25 @@ static int InitInstance(HINSTANCE hInstance)
 	HGLOBAL res_handle;
 	HRESULT hr = S_OK;
 
+	g_hCursorWE    = ::LoadCursor(NULL, IDC_SIZEWE);
+	g_hCursorNS    = ::LoadCursor(NULL, IDC_SIZENS);
+	g_hCursorHand  = ::LoadCursor(nullptr, IDC_HAND);
+	g_hCursorIBeam = ::LoadCursor(NULL, IDC_IBEAM);
+
+	if (NULL == g_hCursorWE || NULL == g_hCursorNS || NULL == g_hCursorHand || NULL == g_hCursorIBeam)
+	{
+		MessageBox(NULL, _T("The calling of LoadCursor() is failed"), _T("DUI Error"), MB_OK);
+		return (-1);
+	}
+
+	g_pD2DFactory = nullptr;
+	hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pD2DFactory);
+	if (S_OK != hr || nullptr == g_pD2DFactory)
+	{
+		MessageBox(NULL, _T("The calling of D2D1CreateFactory() is failed"), _T("DUI Error"), MB_OK);
+		return (-1);
+	}
+
 	/* load the build-in font file(*.ttf) */
 	res = FindResource(hInstance, MAKEINTRESOURCE(IDR_DEFAULTFONT), RT_RCDATA);
 	if (NULL == res)
@@ -221,35 +247,6 @@ static int InitInstance(HINSTANCE hInstance)
 		}
 	}
 
-#if 0
-	{
-		BLResult blRet;
-		BLFontData fd;
-		BLString fontName;
-		blRet = fd.createFromData(fontData, fontSize);
-		if (BL_SUCCESS != blRet)
-		{
-			MessageBox(NULL, _T("Cannot create font data the default font resource within the exe file!"), _T("Error"), MB_OK);
-			return (-1);
-		}
-		blRet = blFontFaceInit(&g_fontFace);
-		if (BL_SUCCESS != blRet)
-		{
-			MessageBox(NULL, _T("Cannot Initialize g_fontFace!"), _T("WoChat Error"), MB_OK);
-			return (-1);
-		}
-		blRet = g_fontFace.createFromData(fd, 0);
-		if (BL_SUCCESS != blRet)
-		{
-			MessageBox(NULL, _T("Cannot create font face the default font resource within the exe file!"), _T("Error"), MB_OK);
-			return (-1);
-		}
-		fontName = g_fontFace.familyName();
-		fontName = g_fontFace.fullName();
-		fontName = g_fontFace.subfamilyName();
-	}
-#endif
-
 	return iRet;
 }
 
@@ -259,6 +256,10 @@ static void ExitInstance(HINSTANCE hInstance)
 
 	// tell all threads to quit
 	InterlockedIncrement(&g_Quit);
+
+	assert(nullptr != g_pD2DFactory);
+	SafeRelease(&g_pD2DFactory);
+	g_pD2DFactory = nullptr;
 
 	if (nullptr != g_ftFace1)
 	{
@@ -288,6 +289,36 @@ static void ExitInstance(HINSTANCE hInstance)
 
 }
 
+int DoLogin()
+{
+	int ret;
+	XWinLogin loginWin;
+	RECT rw = { 0 };
+	MSG msg = { 0 };
+
+	rw.left = 0; rw.top = 0; rw.right = rw.left + 400; rw.bottom = rw.top + 300;
+
+	loginWin.Create(NULL, rw, _T("WoChat Login"), WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_CLIPCHILDREN | WS_VISIBLE);
+	if (FALSE == loginWin.IsWindow())
+		return 1;
+
+	loginWin.CenterWindow();
+	loginWin.ShowWindow(SW_SHOW);
+
+	while (GetMessageW(&msg, nullptr, 0, 0))
+	{
+		if (!TranslateAcceleratorW(msg.hwnd, nullptr, &msg))
+		{
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
+		}
+	}
+
+	ret = loginWin.IsSuccessful() ? 0 : 1;
+
+	return ret;
+}
+
 int WINAPI  _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmdLine, int nShowCmd)
 {
 	int iRet = 0;
@@ -309,6 +340,10 @@ int WINAPI  _tWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPTSTR lpCmd
 		return 0;
 
 	iRet = InitInstance(hInstance);
+	if (0 != iRet)
+		goto ExitThisApplication;
+
+	iRet = DoLogin();
 	if (0 != iRet)
 		goto ExitThisApplication;
 

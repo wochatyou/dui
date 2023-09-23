@@ -1,6 +1,32 @@
 #include <stdint.h>
 #include <assert.h>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+
+extern HCURSOR g_hCursorHand;
+extern HCURSOR g_hCursorIBeam;
+
+#endif 
+
+int SetCursorHand()
+{
+#ifdef _WIN32
+	::SetCursor(g_hCursorHand);
+#endif 
+	return 0;
+}
+
+int SetCursorIBeam()
+{
+#ifdef _WIN32
+	::SetCursor(g_hCursorIBeam);
+#endif 
+	return 0;
+}
+
+
 /* fill the whole screen with one color */
 int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color)
 {

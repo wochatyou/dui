@@ -50,7 +50,13 @@
 extern UINT				g_Quit;
 extern LONG				g_threadCount;
 extern HINSTANCE		g_hInstance;
-//extern BLFontFace		g_fontFace;
+extern ID2D1Factory*    g_pD2DFactory;
+
+extern HCURSOR g_hCursorWE;
+extern HCURSOR g_hCursorNS;
+extern HCURSOR g_hCursorHand;
+extern HCURSOR g_hCursorIBeam;
+
 
 #define XFONT_SIZE0		16
 #define XFONT_SIZE1		13

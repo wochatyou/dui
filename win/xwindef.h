@@ -23,6 +23,7 @@
 #define WM_WIN3_MESSAGE    (WM_USER + 203)
 #define WM_WIN4_MESSAGE    (WM_USER + 204)
 #define WM_WIN5_MESSAGE    (WM_USER + 205)
+#define WM_WIN6_MESSAGE    (WM_USER + 206)
 
 #define WM_INIT_THREAD     (WM_USER + 206)
 #define WM_MQTT_PUBMSG	   (WM_USER + 207)
@@ -46,6 +47,16 @@ static ATL::CWndClassInfo& GetWndClassInfo() \
 	if (0 != uIconSmall) \
 		wc.m_wc.hIconSm = LoadIcon(ATL::_AtlBaseModule.GetModuleInstance(), MAKEINTRESOURCE(uIconSmall)); \
 	return wc; \
+}
+
+template <class T>
+void SafeRelease(T** ppT)
+{
+	if (nullptr != *ppT)
+	{
+		(*ppT)->Release();
+		*ppT = nullptr;
+	}
 }
 
 #endif  /* __WOCHAT_XWINDEF_H__ */
