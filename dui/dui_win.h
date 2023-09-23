@@ -1,449 +1,11 @@
 #ifndef __DUI_WIN_H__
 #define __DUI_WIN_H__
 
-#include <stdint.h>
+#include "dui.h"
+#include "dui_editbox.h"
 #include "dui_mempool.h"
 
-#define S8      int8_t
-#define S16     int16_t
-#define S32     int32_t
-#define S64     int64_t
-
-#define U8      uint8_t
-#define U16     uint16_t
-#define U32     uint32_t
-#define U64     uint64_t
-
-#define DUI_DEBUG	1
-
-/* DUI_ALIGN() is only to be used to align on a power of 2 boundary */
-#define DUI_ALIGN(size, boundary) (((size) + ((boundary) -1)) & ~((boundary) - 1))
-#define DUI_ALIGN_DEFAULT32(size)   DUI_ALIGN(size, 4)
-#define DUI_ALIGN_DEFAULT64(size)   DUI_ALIGN(size, 8)      /** Default alignment */
-#define DUI_ALIGN_PAGE(size)        DUI_ALIGN(size, 1<<16)
-#define DUI_ALIGN_TRUETYPE(size)    DUI_ALIGN(size, 64)    
-
-#define WM_DUI_USER                         0x0400
-#define WM_REDRAW_WINDOW                    (WM_DUI_USER + 300)
-
-int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color);
-
-int ScreenDrawHLine(uint32_t* dst, int w, int h, int position, int stroke, uint32_t color);
-
-int ScreenDrawRect(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy);
-
-int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy);
-
-int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color0, uint32_t color1);
-
-int ScreenFillRectRound(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy, uint32_t c1, uint32_t c2);
-
-int SetCursorHand();
-int SetCursorIBeam();
-
 typedef U32(*ThreadFunc)(void* lpData);
-
-
-#ifdef _MSC_VER
-#define DUI_NO_VTABLE __declspec(novtable)
-#else
-#define DUI_NO_VTABLE
-#endif
-
-typedef struct tagXPOINT
-{
-    int  x;
-    int  y;
-} XPOINT;
-
-typedef struct tagXSIZE
-{
-    int  cx;
-    int  cy;
-} XSIZE;
-
-typedef struct tagXRECT
-{
-    int    left;
-    int    top;
-    int    right;
-    int    bottom;
-} XRECT;
-
-// a pure 32-bit true color bitmap object
-typedef struct XBitmap
-{
-    U8    id;
-    U32*  data;
-    int   w;
-    int   h;
-} XBitmap;
-
-enum XButtonProperty
-{
-    XBUTTON_PROP_NONE   = 0x00,
-    XBUTTON_PROP_ROUND  = 0x01,
-    XBUTTON_PROP_STATIC = 0x02
-};
-
-enum XButtonState
-{
-    XBUTTON_STATE_HIDDEN = 0,
-    XBUTTON_STATE_NORMAL,
-    XBUTTON_STATE_HOVERED,
-    XBUTTON_STATE_PRESSED,
-    XBUTTON_STATE_ACTIVE
-};
-
-typedef struct XButton
-{
-    U8       id        : 6;
-    U8       property  : 2;
-    U8       state     : 4;
-    U8       statePrev : 4;
-    int      left;
-    int      top;
-    int      right;
-    int      bottom;
-    // all XBitmpas should have extactly the same size
-    XBitmap* imgNormal;  
-    XBitmap* imgHover;
-    XBitmap* imgPress;
-    XBitmap* imgActive;
-    int (*pfAction) (void* obj, U32 uMsg, U64 wParam, U64 lParam);
-} XButton;
-
-// determin if one object is hitted
-#define XWinPointInRect(x, y, OBJ)      (((x) >= ((OBJ)->left)) && ((x) < ((OBJ)->right)) && ((y) >= ((OBJ)->top)) && ((y) < ((OBJ)->bottom)))
-
-#define DUI_MAX_EDITSTRING          (1<<16)     // maximu input string
-
-// We don't use an enum so we can build even with conflicting symbols (if another user of stb_textedit.h leak their STB_TEXTEDIT_K_* symbols)
-#define XSTB_TEXTEDIT_K_LEFT         0x200000 // keyboard input to move cursor left
-#define XSTB_TEXTEDIT_K_RIGHT        0x200001 // keyboard input to move cursor right
-#define XSTB_TEXTEDIT_K_UP           0x200002 // keyboard input to move cursor up
-#define XSTB_TEXTEDIT_K_DOWN         0x200003 // keyboard input to move cursor down
-#define XSTB_TEXTEDIT_K_LINESTART    0x200004 // keyboard input to move cursor to start of line
-#define XSTB_TEXTEDIT_K_LINEEND      0x200005 // keyboard input to move cursor to end of line
-#define XSTB_TEXTEDIT_K_TEXTSTART    0x200006 // keyboard input to move cursor to start of text
-#define XSTB_TEXTEDIT_K_TEXTEND      0x200007 // keyboard input to move cursor to end of text
-#define XSTB_TEXTEDIT_K_DELETE       0x200008 // keyboard input to delete selection or character under cursor
-#define XSTB_TEXTEDIT_K_BACKSPACE    0x200009 // keyboard input to delete selection or character left of cursor
-#define XSTB_TEXTEDIT_K_UNDO         0x20000A // keyboard input to perform undo
-#define XSTB_TEXTEDIT_K_REDO         0x20000B // keyboard input to perform redo
-#define XSTB_TEXTEDIT_K_WORDLEFT     0x20000C // keyboard input to move cursor left one word
-#define XSTB_TEXTEDIT_K_WORDRIGHT    0x20000D // keyboard input to move cursor right one word
-#define XSTB_TEXTEDIT_K_PGUP         0x20000E // keyboard input to move cursor up a page
-#define XSTB_TEXTEDIT_K_PGDOWN       0x20000F // keyboard input to move cursor down a page
-#define XSTB_TEXTEDIT_K_SHIFT        0x400000
-
-#if 0
-#undef STB_TEXTEDIT_CHARTYPE
-#define STB_TEXTEDIT_CHARTYPE           uint16_t
-#define STB_TEXTEDIT_UNDOSTATECOUNT     99
-#define STB_TEXTEDIT_UNDOCHARCOUNT      999
-
-#define STB_TEXTEDIT_IMPLEMENTATION
-#define STB_TEXTEDIT_memmove memmove
-//#include "imstb_textedit.h"
-#endif
-
-enum
-{
-    XEDIT_STATUS_NONE   = 0x00,
-    XEDIT_STATUS_FOCUS  = 0x01,
-    XEDIT_STATUS_CARET  = 0x02
-};
-
-class XEditBox
-{
-public:
-    int left;
-    int top;
-    int right;
-    int bottom;
-    int cursorW;
-    int cursorH;
-    U32 cursorColor;
-    U32 status;
-    U32 backgroundColor;
-    U16 cursorChar = 0;
-    U16 textChar[DUI_MAX_EDITSTRING + 1] = { 0 };
-    //U16 textWidth[DUI_MAX_EDITSTRING + 1] = { 0 };
-    U32* buffer;
-    U32  size;
-
-    // cairo/harfbuzz issue to cache to speed up
-    cairo_font_extents_t m_font_extents = { 0 };
-    cairo_glyph_t* m_cairo_glyphs = nullptr;
-    cairo_font_face_t* m_cairo_face = nullptr;
-    hb_font_t* m_hb_font = nullptr;
-    hb_buffer_t* m_hb_buffer = nullptr;
-    int m_lineHeight;
-
-    XEditBox()
-    {
-        status = XEDIT_STATUS_NONE;
-        cursorW = 1;
-        cursorH = 22;
-        buffer = nullptr;
-        size = 0;
-        backgroundColor = 0xFFFFFFFF;
-        cursorColor = 0xFF000000;
-        textChar[0] = 0;
-    }
-
-    int Init()
-    {
-        hb_bool_t hs = 0;
-        assert(nullptr == m_cairo_glyphs);
-        m_cairo_glyphs = cairo_glyph_allocate(1024);
-        if (nullptr == m_cairo_glyphs)
-            return(-1);
-
-        assert(nullptr != g_ftFace0);
-        assert(nullptr == m_cairo_face);
-        m_cairo_face = cairo_ft_font_face_create_for_ft_face(g_ftFace0, 0);
-        if (nullptr == m_cairo_face)
-        {
-            cairo_glyph_free(m_cairo_glyphs);
-            m_cairo_glyphs = nullptr;
-            return (-2);
-        }
-
-        assert(nullptr == m_hb_font);
-        m_hb_font = hb_ft_font_create(g_ftFace0, NULL);
-        if (nullptr == m_hb_font)
-        {
-            cairo_glyph_free(m_cairo_glyphs);
-            m_cairo_glyphs = nullptr;
-            cairo_font_face_destroy(m_cairo_face);
-            m_cairo_face = nullptr;
-            return (-3);
-        }
-
-        assert(nullptr == m_hb_buffer);
-        m_hb_buffer = hb_buffer_create();
-        hs = hb_buffer_allocation_successful(m_hb_buffer);
-        if (0 == hs || nullptr == m_hb_buffer)
-        {
-            cairo_glyph_free(m_cairo_glyphs);
-            m_cairo_glyphs = nullptr;
-            cairo_font_face_destroy(m_cairo_face);
-            m_cairo_face = nullptr;
-
-            hb_font_destroy(m_hb_font);
-            m_hb_font = nullptr;
-            return (-4);
-        }
-
-        // detect the line height
-        m_lineHeight = 0;
-        cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 64, 64);
-        cairo_status_t cs = cairo_surface_status(cairo_surface);
-        if (CAIRO_STATUS_SUCCESS == cs)
-        {
-            cairo_t* cr = cairo_create(cairo_surface);
-            cs = cairo_status(cr);
-            if (CAIRO_STATUS_SUCCESS == cs)
-            {
-                cairo_set_font_face(cr, m_cairo_face);
-                cairo_set_font_size(cr, XFONT_SIZE0);
-                cairo_font_extents(cr, &m_font_extents);
-
-                m_lineHeight = (int)m_font_extents.height;
-                cairo_destroy(cr);
-            }
-            cairo_surface_destroy(cairo_surface);
-        }
-
-        if (0 == m_lineHeight)
-            return(-1);
-
-        cursorW = 1;
-        cursorH = m_lineHeight;
-
-        return 0;
-    }
-
-    void Term()
-    {
-        assert(nullptr != m_cairo_glyphs);
-        cairo_glyph_free(m_cairo_glyphs);
-        m_cairo_glyphs = nullptr;
-
-        assert(nullptr != m_hb_buffer);
-        hb_buffer_destroy(m_hb_buffer);
-        m_hb_buffer = nullptr;
-
-        assert(nullptr != m_hb_font);
-        hb_font_destroy(m_hb_font);
-        m_hb_font = nullptr;
-
-        assert(nullptr != m_cairo_face);
-        cairo_font_face_destroy(m_cairo_face);
-        m_cairo_face = nullptr;
-    }
-
-    bool IsFocused()
-    {
-        return (status & XEDIT_STATUS_FOCUS);
-    }
-
-    int MoveCursorLR(int direction)
-    {
-        if (direction > 0)
-            cursorChar++;
-        else if (direction < 0)
-        {
-            if (cursorChar > 0)
-                cursorChar--;
-        }
-
-        return 0;
-    }
-
-    void ClearFocusedStatus()
-    {
-        status &= ~(XEDIT_STATUS_FOCUS | XEDIT_STATUS_CARET);
-    }
-
-    void SetFocusedStatus()
-    {
-        status |= (XEDIT_STATUS_FOCUS | XEDIT_STATUS_CARET);
-    }
-
-    void FlipCaret()
-    {
-        if (XEDIT_STATUS_CARET & status)
-        {
-            status &= ~XEDIT_STATUS_CARET;
-        }
-        else
-        {
-            status |= XEDIT_STATUS_CARET;
-        }
-    }
-
-    void AttachScreenBuffer(U32* buf, U32 size)
-    {
-        buffer = buf;
-        size = size;
-    }
-
-    int OnChar(U16 charcode)
-    {
-        U16 charNum = textChar[0];
-        if (charNum < DUI_MAX_EDITSTRING)
-        {
-            U32 i, glyphLen;
-            U16* pTxt;
-            hb_glyph_info_t* hbinfo;
-            hb_glyph_position_t* hbpos;
-
-            charNum++;
-            textChar[0] = charNum;
-            cursorChar++;
-            textChar[charNum] = charcode;
-        }
-
-        return 0;
-    }
-
-    int Draw()
-    {
-        int cursorX = 0, cursorY = 0, dx;
-        U32 i, glyphLen, w, h, charWidth, charHeight, xOffset, yOffset;
-        U32* crdata;
-        double baseline, current_x, current_y;
-        double R = 1, G = 1, B = 1;
-        hb_glyph_info_t* hbinfo;
-        hb_glyph_position_t* hbpos;
-        U16 strLen = textChar[0];
-        U16* utf16String = textChar + 1; // the first 2 bytes are the string length
-
-        ScreenClear(buffer, size, backgroundColor);
-
-        w = 0; h = m_lineHeight;
-        hb_buffer_reset(m_hb_buffer);
-        hb_buffer_add_utf16(m_hb_buffer, (const uint16_t*)utf16String, strLen, 0, strLen);
-        hb_buffer_guess_segment_properties(m_hb_buffer);
-        /* Shape it! */
-        hb_shape(m_hb_font, m_hb_buffer, NULL, 0);
-        /* Get glyph information and positions out of the buffer. */
-        glyphLen = hb_buffer_get_length(m_hb_buffer);
-        if (glyphLen > 0)
-        {
-            U16 startChar = 0, endChar = 0;
-            hbinfo = hb_buffer_get_glyph_infos(m_hb_buffer, NULL);
-            hbpos = hb_buffer_get_glyph_positions(m_hb_buffer, NULL);
-
-            if (glyphLen > 6)
-            {
-                startChar = 2; endChar = 5;
-            }
-
-            current_x = current_y = 0;
-            w = 0;
-            for (i = 0; i < glyphLen; i++)
-            {
-                m_cairo_glyphs[i].index = hbinfo[i].codepoint;
-
-                charWidth  = (DUI_ALIGN_TRUETYPE(hbpos[i].x_advance) >> 6) + 1;
-                charHeight = (DUI_ALIGN_TRUETYPE(hbpos[i].y_advance) >> 6);
-                xOffset    = (DUI_ALIGN_TRUETYPE(hbpos[i].x_offset) >> 6);
-                yOffset    = (DUI_ALIGN_TRUETYPE(hbpos[i].y_offset) >> 6);
-
-                m_cairo_glyphs[i].x = current_x + xOffset;
-                m_cairo_glyphs[i].y = -(current_y + yOffset);
-                current_x += charWidth;
-                current_y += charHeight;
-                w += charWidth;
-                if (i <= cursorChar)
-                    cursorX += charWidth;
-            }
-            h = m_lineHeight << 1;
-            w += 20;
-            cairo_surface_t* cairo_surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
-            cairo_status_t cs = cairo_surface_status(cairo_surface);
-            if (CAIRO_STATUS_SUCCESS == cs)
-            {
-                cairo_t* cr = cairo_create(cairo_surface);
-                cs = cairo_status(cr);
-                if (CAIRO_STATUS_SUCCESS == cs)
-                {
-                    cairo_set_font_face(cr, m_cairo_face);
-                    cairo_set_font_size(cr, XFONT_SIZE0);
-                    cairo_font_extents(cr, &m_font_extents);
-                    baseline = (XFONT_SIZE0 - m_font_extents.height) * 0.5 + m_font_extents.ascent + 6;
-                    cairo_set_source_rgba(cr, R, G, B, 1);
-                    cairo_paint(cr);
-                    B = (double)(0x97) / (double)(0xFF); G = (double)(0xC6) / (double)(0xFF); R = double(0xEB) / (double)(0xFF);
-                    cairo_set_source_rgba(cr, R, G, B, 1);
-                    cairo_rectangle(cr, 0, 0, 100, 30);
-                    cairo_fill(cr);
-                    cairo_set_source_rgba(cr, 0.333, 0.333, 0.333, 1);
-                    cairo_translate(cr, 0, baseline);
-                    cairo_set_font_size(cr, XFONT_SIZE0);
-                    cairo_show_glyphs(cr, m_cairo_glyphs, glyphLen);
-                    crdata = (U32*)cairo_image_surface_get_data(cairo_surface);
-                    ScreenDrawRect(buffer, right - left, bottom - top, crdata, w, h, 0, 0);
-
-                    cairo_destroy(cr);
-                }
-                cairo_surface_destroy(cairo_surface);
-            }
-        }
-
-        if (XEDIT_STATUS_CARET & status)
-        {
-            dx = (cursorX > 0) ? cursorX - 1: 0;
-            ScreenFillRect(buffer, right - left, bottom - top, cursorColor, cursorW, cursorH-2, dx, 2);
-        }
-
-        return 0;
-    }
-};
 
 enum
 {
@@ -460,7 +22,7 @@ enum
 {
     DUI_PROP_NONE             = 0x00,   // None Properties
     DUI_PROP_MOVEWIN          = 0x01,   // Move the whole window while LButton is pressed
-    DUI_PROP_BTNACTIVE        = 0x02,   // no active button on this virutal window
+    DUI_PROP_BTNACTIVE        = 0x02,   // have active button on this virutal window
     DUI_PROP_HASVSCROLL       = 0x04,    // have vertical scroll bar
     DUI_PROP_HASHSCROLL       = 0x08,
     DUI_PROP_HANDLEVWHEEL     = 0x10,   // does this window need to handle mouse wheel?
@@ -471,35 +33,43 @@ enum
 
 enum
 {
-    DEFAULT_BORDER_COLOR        = 0xFFBBBBBB,
-    DEFAULT_SCROLLBKG_COLOR     = 0xFFF9F3F1,
-    DEFAULT_SCROLLTHUMB_COLOR   = 0xFFC0C1C4,
-    DEFAULT_SCROLLTHUMB_COLORA  = 0xFFAAABAD
+    DEFAULT_BORDER_COLOR = 0xFFBBBBBB,
+    DEFAULT_SCROLLBKG_COLOR = 0xFFF9F3F1,
+    DEFAULT_SCROLLTHUMB_COLOR = 0xFFC0C1C4,
+    DEFAULT_SCROLLTHUMB_COLORA = 0xFFAAABAD
 };
-
 
 template <class T>
 class DUI_NO_VTABLE XWindowT
 {
-private:    
+private:
     enum class XDragMode { DragNone, DragVertical, DragHorizonal };
 
 public:
-    void*   m_hWnd = nullptr;
-    U32*    m_screen = nullptr;
+    typedef int (T::*ProcessOSMessage)(U32 uMsg, U64 wParam, U64 lParam, void* lpData);
+
+#ifdef _WIN32
+    HWND m_hWnd = nullptr;  // the pointer to point the host real/platform window
+#else
+    void* m_hWnd = nullptr;
+#endif
+
+    U32*    m_screen = nullptr;  // the memory block that will be rendered to the screen by the platform
     U32     m_size = 0;
     U8      m_Id[8] = { 0 }; // for debugging 
     XRECT   m_area = { 0 };  // the area of this window in the client area of parent window
 
     MemoryContext m_pool = nullptr;
 
-    int     m_buttonStartIdx = 0;
-    int     m_buttonEndIdx = -1;
-    int     m_buttonActiveIdx = -1;
-
-    bool  m_cursorNormal = true;
+    ProcessOSMessage m_messageFuncPointerTab[256] = { 0 };  // we only handle 255 messages that should be enough
 
     const int m_scrollWidth = 8; // in pixel
+
+    const int m_buttonStartIdx = 0;
+    int       m_buttonEndIdx = -1;
+    int       m_buttonActiveIdx = -1;
+
+    bool  m_cursorNormal = true;
 
     XPOINT m_ptOffset = { 0 };
     XPOINT m_ptOffsetOld = { 0 };
@@ -511,25 +81,20 @@ public:
 
     XDragMode  m_DragMode = XDragMode::DragNone;
 
-#ifdef _WIN32
-    HCURSOR  m_cursorHand = nullptr;
-#else
-    void*  m_cursorHand = nullptr;
-#endif
     U32  m_status = DUI_STATUS_VISIBLE;
     U32  m_property = DUI_PROP_NONE;
-    U32  m_message = 0;
+    U32  m_message = DUI_NULL;
     U32  m_backgroundColor = DEFAULT_BACKGROUND_COLOR;
     U32  m_scrollbarColor = DEFAULT_SCROLLBKG_COLOR;
     U32  m_thumbColor = DEFAULT_SCROLLTHUMB_COLOR;
 
     enum {
         MAX_XBUTTONS = 16,
-        MAX_XBUTTOn_BITMAPS = (MAX_XBUTTONS << 2)
+        MAX_XBUTTON_BITMAPS = (MAX_XBUTTONS << 2)
     };
 
     XButton  m_button[MAX_XBUTTONS];
-    XBitmap  m_bitmap[MAX_XBUTTOn_BITMAPS];
+    XBitmap  m_bitmap[MAX_XBUTTON_BITMAPS];
 
 public:
     XWindowT()
@@ -537,15 +102,24 @@ public:
         U8 id;
         XButton* button;
         XBitmap* bmp;
-#ifdef _WIN32        
-        m_cursorHand = ::LoadCursor(nullptr, IDC_HAND);
-#else
-        #error You have to provide platform-specified load cursor function here
-#endif        
-        assert(NULL != m_cursorHand);
+
+        m_messageFuncPointerTab[DUI_NULL] = nullptr;
+
+        ProcessOSMessage* pf = m_messageFuncPointerTab;
+        pf[DUI_CREATE]      = &T::OnCreate;
+        pf[DUI_DESTROY]     = &T::OnDestroy;
+        pf[DUI_MOUSEMOVE]   = &T::OnMouseMove;
+        pf[DUI_LBUTTONDOWN] = &T::OnLButtonDown;
+        pf[DUI_LBUTTONUP]   = &T::OnLButtonUp;
+        pf[DUI_SIZE]        = &T::OnSize;
+        pf[DUI_TIMER]       = &T::OnTimer;
+        pf[DUI_MOUSEWHEEL]  = &T::OnMouseWheel;
+        pf[DUI_KEYDOWN]     = &T::OnKeyPress;
+        pf[DUI_CHAR]        = &T::OnChar;
+        pf[DUI_SETCURSOR]   = &T::OnSetCursor;
 
         static_assert(MAX_XBUTTONS < (1 << 6));
-        
+
         // initialize the button's status
         for (id = 0; id < MAX_XBUTTONS; id++)
         {
@@ -555,11 +129,10 @@ public:
             button->statePrev = button->state = XBUTTON_STATE_NORMAL;
             button->left = button->right = button->top = button->bottom = 0;
             button->imgNormal = button->imgHover = button->imgPress = button->imgActive = nullptr;
-            button->pfAction = nullptr;
+            button->pfAction = ButtonAction;
         }
-
         // initialize the bitmap's status
-        for (id = 0; id < MAX_XBUTTOn_BITMAPS; id++)
+        for (id = 0; id < MAX_XBUTTON_BITMAPS; id++)
         {
             bmp = &m_bitmap[id];
             bmp->id = id;
@@ -568,10 +141,47 @@ public:
         }
     }
 
-    ~XWindowT() 
+    ~XWindowT()
     {
-        if(nullptr != m_pool)
+        if (nullptr != m_pool)
+        {
             mempool_destroy(m_pool);
+            m_pool = nullptr;
+        }
+    }
+
+    // < 0 : I do not handle this message
+    // = 0 : I handled, but I do not need to upgrade the screen
+    // > 0 : I handled this message, and need the host window to upgrade the screen
+    int HandleOSMessage(U32 uMsg, U64 wParam, U64 lParam, void* lpData)
+    {
+        int r = -1;
+
+        U16 msgIdOS = DUI_MOD(uMsg, MESSAGEMAP_TABLE_SIZE);
+        U8 msgId = DUIMessageOSMap[msgIdOS];  // lookup the message map from Platform to our DUI message
+
+        if (DUI_NULL != msgId)
+        {
+            ProcessOSMessage pfMSG = m_messageFuncPointerTab[msgId];
+            if (nullptr != pfMSG)
+            {
+                T* pT = static_cast<T*>(this);
+                r = (pT->*pfMSG)(uMsg, wParam, lParam, lpData);
+            }
+        }
+
+        return r;
+    }
+
+    static int ButtonAction(void* obj, U32 uMsg, U64 wParam, U64 lParam)
+    {
+        int ret = 0;
+
+        T* pT = static_cast<T*>(obj);
+        if (nullptr != pT)
+            ret = pT->NotifyParent(uMsg, wParam, lParam);
+
+        return ret;
     }
 
     bool IsRealWindow(void* hwnd)
@@ -764,7 +374,6 @@ public:
             assert(nullptr != bitmap);
 
             src = bitmap->data;
-
             assert(nullptr != src);
 
             if (XBUTTON_PROP_ROUND & button->property)
@@ -778,7 +387,13 @@ public:
         }
     }
 
-    void UpdatePosition() {}
+    void UpdateButtonPosition() {}
+    void UpdatePosition() 
+    {
+        T* pT = static_cast<T*>(this);
+        pT->UpdateButtonPosition();
+    }
+
     void SetPosition(RECT* r, U32* screen, U32 size = 0)
     {
         if (nullptr != r)
@@ -892,27 +507,13 @@ public:
         if (nullptr != r && nullptr != m_screen)
         {
             T* pT = static_cast<T*>(this);
+            pT->UpdateButtonPosition();
             pT->DoSize(uMsg, wParam, lParam, lpData);
         }
 
         m_status |= DUI_STATUS_NEEDRAW;  // need to redraw this virtual window
 
         return DUI_STATUS_NEEDRAW;
-    }
-
-    int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
-    int OnTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
-    {
-        int r = DUI_STATUS_NODRAW;
-        if(DUI_PROP_HANDLETIMER & m_property)
-        {
-            T* pT = static_cast<T*>(this);
-            r = pT->DoTimer(uMsg, wParam, lParam, lpData);
-            if(DUI_STATUS_NODRAW != r)
-                m_status |= DUI_STATUS_NEEDRAW;
-        }
-
-        return r;
     }
 
     int DoMouseWheel(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
@@ -1107,8 +708,7 @@ public:
     }
 
     int DoFocusGet(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
-    int DoFocusLose
-    (U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
+    int DoFocusLose(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return 0; }
 
     int DoLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
     int OnLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
@@ -1392,8 +992,11 @@ public:
     int OnCreate(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
     {
         int ret = DUI_STATUS_NODRAW;
+#ifdef _WIN32
+        m_hWnd = (HWND)wParam;
+#else
         m_hWnd = (void*)wParam;
-
+#endif
         assert(IsRealWindow(m_hWnd));
 
         T* pT = static_cast<T*>(this);
@@ -1413,12 +1016,14 @@ public:
         return ret;
     }
 
-    int DoSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr) { return (m_cursorNormal)? 0 : 1; }
-    int OnSetCursor(U32 uMsg, int xPos, int yPos, void* lpData = nullptr)
+    int DoSetCursor(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+    int OnSetCursor(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
     {
+        int r = DUI_STATUS_NODRAW;
+
         T* pT = static_cast<T*>(this);
-        int ret = pT->DoSetCursor(uMsg, xPos, yPos, lpData);
-        return ret;
+        r = pT->DoSetCursor(uMsg, wParam, lParam, lpData);
+        return r;
     }
 
     int DoChar(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
@@ -1428,6 +1033,10 @@ public:
         if (DUI_PROP_HANDLEKEYBOARD & m_property)
         {
             T* pT = static_cast<T*>(this);
+
+            //ProcessOSMessage pfOSM = m_functionTab[0];
+            //r = (pT->*pfOSM)(uMsg, wParam, lParam, lpData);
+
             r = pT->DoChar(uMsg, wParam, lParam, lpData);
             if (DUI_STATUS_NODRAW != r)
                 m_status |= DUI_STATUS_NEEDRAW;
@@ -1448,6 +1057,20 @@ public:
                 m_status |= DUI_STATUS_NEEDRAW;
         }
 
+        return r;
+    }
+
+    int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr) { return 0; }
+    int OnTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+    {
+        int r = DUI_STATUS_NODRAW;
+        if (DUI_PROP_HANDLETIMER & m_property)
+        {
+            T* pT = static_cast<T*>(this);
+            r = pT->DoTimer(uMsg, wParam, lParam, lpData);
+            if (DUI_STATUS_NODRAW != r)
+                m_status |= DUI_STATUS_NEEDRAW;
+        }
         return r;
     }
 

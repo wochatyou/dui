@@ -64,6 +64,7 @@ extern HCURSOR g_hCursorIBeam;
 extern FT_Library		g_ftLibrary;
 extern FT_Face			g_ftFace0;
 extern FT_Face			g_ftFace1;
+extern FT_Face			g_ftFace2;
 
 #endif  /* __DUIAPP_H__ */
 

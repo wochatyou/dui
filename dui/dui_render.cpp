@@ -34,6 +34,8 @@ int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color)
 	newColor <<= 32;
 	newColor |= (uint64_t)color;
 
+	assert(nullptr != dst);
+
 	uint64_t* p64 = (uint64_t*)dst;
 	for (uint32_t i = 0; i < (size >> 1); i++)
 		*p64++ = newColor;

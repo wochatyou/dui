@@ -64,7 +64,7 @@ public:
 		U32* p;
 		U32* q;
 		m_backgroundColor = 0xFFF5F5F5;
-		m_message = WM_WIN4_MESSAGE;
+		m_message = WM_XWINDOWS04;
 		m_property |= (DUI_PROP_HASVSCROLL | DUI_PROP_HANDLEVWHEEL);
 
 		p = (U32*)xbmpXMeArrow;
@@ -286,9 +286,12 @@ public:
 	// do the text layout from top to bottom (head to tail)
 	void UpdatePosition() 
 	{
+#if 0
 		int ret = ReWrapFromTail();
 		if(0 != ret)
 			CreatePlatformThread(TextLayoutThread, this);
+#endif
+		ReWrapFromHead();
 	}
 
 	int ReWrapFromHead()
@@ -361,7 +364,7 @@ public:
 		hb_font_destroy(hb_font);
 
 		m_status |= DUI_STATUS_NEEDRAW;
-		NotifyParent(WM_REDRAW_WINDOW, 0, 0);
+		NotifyParent(WM_XWINDOWSPAINT, 0, 0);
 
 		return 0;
 

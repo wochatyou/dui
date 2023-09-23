@@ -1,3 +1,4 @@
+#if 0
 // dear imgui, v1.90 WIP
 // (tables and columns code)
 
@@ -4158,3 +4159,4 @@ void ImGui::Columns(int columns_count, const char* id, bool border)
 
 //-------------------------------------------------------------------------
 
+#endif

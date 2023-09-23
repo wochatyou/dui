@@ -1,4 +1,3 @@
-
 #include "duiapp.h"
 #include "xbitmapdata.h"
 #include "resource.h"
@@ -20,6 +19,7 @@ HINSTANCE			g_hInstance = nullptr;
 FT_Library			g_ftLibrary = nullptr;
 FT_Face				g_ftFace0 = nullptr;
 FT_Face				g_ftFace1 = nullptr;
+FT_Face				g_ftFace2 = nullptr;
 ID2D1Factory*       g_pD2DFactory = nullptr;
 
 HCURSOR g_hCursorWE    = nullptr;
@@ -247,6 +247,54 @@ static int InitInstance(HINSTANCE hInstance)
 		}
 	}
 
+	/* load the build-in font file(*.ttf) */
+	res = FindResource(hInstance, MAKEINTRESOURCE(IDR_ASCIIFONT), RT_RCDATA);
+	if (NULL == res)
+	{
+		MessageBox(NULL, _T("Cannot find the default font resource within the exe file!"), _T("Error"), MB_OK);
+		return (-1);
+	}
+	res_handle = LoadResource(hInstance, res);
+	if (NULL == res_handle)
+	{
+		MessageBox(NULL, _T("Cannot load the default font resource within the exe file!"), _T("Error"), MB_OK);
+		return (-1);
+	}
+	fontData = (BYTE*)LockResource(res_handle);
+	fontSize = SizeofResource(hInstance, res);
+	if (NULL == fontData || 0 == fontSize)
+	{
+		MessageBox(NULL, _T("Cannot lock the default font resource within the exe file!"), _T("Error"), MB_OK);
+		return (-1);
+	}
+
+	{
+		FT_Error ft_error;
+		g_ftFace2 = nullptr;
+
+		ft_error = FT_New_Memory_Face(g_ftLibrary, (const FT_Byte*)fontData, fontSize, 0, &g_ftFace2);
+		if (ft_error || nullptr == g_ftFace2)
+		{
+			FT_Done_Face(g_ftFace0);
+			FT_Done_Face(g_ftFace1);
+			FT_Done_FreeType(g_ftLibrary);
+			MessageBox(NULL, _T("FT_New_Memory_Face call is faied!"), _T("Error"), MB_OK);
+			return (-2);
+		}
+		ft_error = FT_Set_Char_Size(g_ftFace2, XFONT_SIZE0 * 64, XFONT_SIZE0 * 64, 0, 0);
+		if (ft_error)
+		{
+			FT_Done_Face(g_ftFace0);
+			FT_Done_Face(g_ftFace1);
+			FT_Done_Face(g_ftFace2);
+			FT_Done_FreeType(g_ftLibrary);
+			MessageBox(NULL, _T("FT_Set_Char_Size call is faied!"), _T("Error"), MB_OK);
+			return (-3);
+		}
+	}
+
+	iRet = DUI_Init();
+
 	return iRet;
 }
 
@@ -256,6 +304,8 @@ static void ExitInstance(HINSTANCE hInstance)
 
 	// tell all threads to quit
 	InterlockedIncrement(&g_Quit);
+
+	DUI_Term();
 
 	assert(nullptr != g_pD2DFactory);
 	SafeRelease(&g_pD2DFactory);

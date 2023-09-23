@@ -1,6 +1,195 @@
 #ifndef __DUI_H__
 #define __DUI_H__
 
+#include <stdint.h>
+
+#define DUI_DEBUG	1
+#define DUI_OK      0
+
+#define S8      int8_t
+#define S16     int16_t
+#define S32     int32_t
+#define S64     int64_t
+
+#define U8      uint8_t
+#define U16     uint16_t
+#define U32     uint32_t
+#define U64     uint64_t
+
+#define MESSAGEMAP_TABLE_SIZE       (1<<16)
+
+/* DUI_ALIGN() is only to be used to align on a power of 2 boundary */
+#define DUI_ALIGN(size, boundary) (((size) + ((boundary) -1)) & ~((boundary) - 1))
+#define DUI_ALIGN_DEFAULT32(size)   DUI_ALIGN(size, 4)
+#define DUI_ALIGN_DEFAULT64(size)   DUI_ALIGN(size, 8)      /** Default alignment */
+#define DUI_ALIGN_PAGE(size)        DUI_ALIGN(size, 1<<16)
+#define DUI_ALIGN_TRUETYPE(size)    DUI_ALIGN(size, 64)    
+
+/*
+ * Fast MOD arithmetic, assuming that y is a power of 2 !
+ */
+#define DUI_MOD(x,y)			 ((x) & ((y)-1))
+
+
+// DUI Message that is OS independent;
+#define DUI_NULL                0x00
+#define DUI_CREATE              0x01
+#define DUI_DESTROY             0x02
+#define DUI_ERASEBKGND          0x03
+#define DUI_PAINT         	    0x04
+#define DUI_TIMER               0x05
+#define DUI_MOUSEMOVE           0x06
+#define DUI_MOUSEWHEEL          0x07
+#define DUI_MOUSEFIRST          0x08
+#define DUI_LBUTTONDOWN         0x0A
+#define DUI_LBUTTONUP           0x0B
+#define DUI_LBUTTONDBLCLK       0x0C
+#define DUI_RBUTTONDOWN         0x0D
+#define DUI_RBUTTONUP           0x0E
+#define DUI_RBUTTONDBLCLK       0x0F
+#define DUI_MBUTTONDOWN         0x10
+#define DUI_MBUTTONUP           0x11
+#define DUI_MBUTTONDBLCLK       0x12
+#define DUI_CAPTURECHANGED      0x13
+#define DUI_KEYFIRST            0x14
+#define DUI_KEYDOWN             0x15
+#define DUI_KEYUP               0x16
+#define DUI_CHAR                0x17
+#define DUI_DEADCHAR            0x18
+#define DUI_SYSKEYDOWN          0x19
+#define DUI_SYSKEYUP            0x1A
+#define DUI_SYSCHAR             0x1B
+#define DUI_SYSDEADCHAR         0x1C
+#define DUI_GETMINMAXINFO       0x1D
+#define DUI_SIZE                0x1E
+#define DUI_SETCURSOR           0x1F
+#define DUI_SETFOCUS            0x20
+#define DUI_MOUSEACTIVATE       0x21
+
+// User defined message
+#define DUI_XWINDOWS00          0xFF
+#define DUI_XWINDOWS01          0xFE
+#define DUI_XWINDOWS02          0xFD
+#define DUI_XWINDOWS03          0xFC
+#define DUI_XWINDOWS04          0xFB
+#define DUI_XWINDOWS05          0xFA
+#define DUI_XWINDOWS06          0xF9
+#define DUI_XWINDOWS07          0xF8
+#define DUI_XWINDOWS08          0xF7
+#define DUI_XWINDOWS09          0xF6
+
+#ifdef _WIN32
+#define WM_XWINDOWSXX       (WM_USER + DUI_NULL)
+#define WM_XWINDOWS00       (WM_USER + DUI_XWINDOWS00)
+#define WM_XWINDOWS01       (WM_USER + DUI_XWINDOWS01)
+#define WM_XWINDOWS02       (WM_USER + DUI_XWINDOWS02)
+#define WM_XWINDOWS03       (WM_USER + DUI_XWINDOWS03)
+#define WM_XWINDOWS04       (WM_USER + DUI_XWINDOWS04)
+#define WM_XWINDOWS05       (WM_USER + DUI_XWINDOWS05)
+#define WM_XWINDOWS06       (WM_USER + DUI_XWINDOWS06)
+#define WM_XWINDOWS07       (WM_USER + DUI_XWINDOWS07)
+#define WM_XWINDOWS08       (WM_USER + DUI_XWINDOWS08)
+#define WM_XWINDOWS09       (WM_USER + DUI_XWINDOWS09)
+
+#define WM_XWINDOWSPAINT    (WM_USER + DUI_PAINT)
+
+#endif 
+
+#ifdef _MSC_VER
+#define DUI_NO_VTABLE __declspec(novtable)
+#else
+#define DUI_NO_VTABLE
+#endif
+
+typedef struct tagXPOINT
+{
+    int  x;
+    int  y;
+} XPOINT;
+
+typedef struct tagXSIZE
+{
+    int  cx;
+    int  cy;
+} XSIZE;
+
+typedef struct tagXRECT
+{
+    int    left;
+    int    top;
+    int    right;
+    int    bottom;
+} XRECT;
+
+// a pure 32-bit true color bitmap object
+typedef struct XBitmap
+{
+    U8    id;
+    U32* data;
+    int   w;
+    int   h;
+} XBitmap;
+
+enum XButtonProperty
+{
+    XBUTTON_PROP_NONE = 0x00,
+    XBUTTON_PROP_ROUND = 0x01,
+    XBUTTON_PROP_STATIC = 0x02
+};
+
+enum XButtonState
+{
+    XBUTTON_STATE_HIDDEN = 0,
+    XBUTTON_STATE_NORMAL,
+    XBUTTON_STATE_HOVERED,
+    XBUTTON_STATE_PRESSED,
+    XBUTTON_STATE_ACTIVE
+};
+
+typedef struct XButton
+{
+    U8       id : 6;
+    U8       property  : 2;
+    U8       state : 4;
+    U8       statePrev : 4;
+    int      left;
+    int      top;
+    int      right;
+    int      bottom;
+    // all XBitmpas should have extactly the same size
+    XBitmap* imgNormal;
+    XBitmap* imgHover;
+    XBitmap* imgPress;
+    XBitmap* imgActive;
+    int (*pfAction) (void* obj, U32 uMsg, U64 wParam, U64 lParam);
+} XButton;
+
+// determin if one object is hitted
+#define XWinPointInRect(x, y, OBJ)      (((x) >= ((OBJ)->left)) && ((x) < ((OBJ)->right)) && ((y) >= ((OBJ)->top)) && ((y) < ((OBJ)->bottom)))
+
+
+extern U8 DUIMessageOSMap[MESSAGEMAP_TABLE_SIZE];
+
+int DUI_Init();
+void DUI_Term();
+
+int ScreenClear(uint32_t* dst, uint32_t size, uint32_t color);
+
+int ScreenDrawHLine(uint32_t* dst, int w, int h, int position, int stroke, uint32_t color);
+
+int ScreenDrawRect(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy);
+
+int ScreenFillRect(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy);
+
+int ScreenDrawRectRound(uint32_t* dst, int w, int h, uint32_t* src, int sw, int sh, int dx, int dy, uint32_t color0, uint32_t color1);
+
+int ScreenFillRectRound(uint32_t* dst, int w, int h, uint32_t color, int sw, int sh, int dx, int dy, uint32_t c1, uint32_t c2);
+
+int SetCursorHand();
+
+int SetCursorIBeam();
+
+#if 0
 // dear imgui, v1.90 WIP
 // (headers)
 
@@ -3211,7 +3400,7 @@ enum ImGuiModFlags_ { ImGuiModFlags_None = 0, ImGuiModFlags_Ctrl = ImGuiMod_Ctrl
 #ifdef IMGUI_INCLUDE_IMGUI_USER_H
 #include "imgui_user.h"
 #endif
-
+#endif
 
 #endif // __DUI_H__
 

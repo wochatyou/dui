@@ -1,3 +1,4 @@
+#if 0
 // dear imgui, v1.90 WIP
 // (widgets code)
 
@@ -8832,3 +8833,4 @@ void ImGui::TabItemLabelAndCloseButton(ImDrawList* draw_list, const ImRect& bb, 
         *out_just_closed = close_button_pressed;
 }
 
+#endif

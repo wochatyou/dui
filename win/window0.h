@@ -14,7 +14,6 @@ enum
 	, XWIN0_BUTTON_FILE
 	, XWIN0_BUTTON_SETTING
 	, XWIN0_BUTTON_NETWORK
-	//, XWIN0_BUTTON_BITCOIN
 };
 
 class XWindow0 : public XWindowT <XWindow0>
@@ -23,35 +22,35 @@ private:
 	enum 
 	{
 		XWIN0_BITMAP_ME = 0
-		, XWIN0_BITMAP_TALKN			// Normal
-		, XWIN0_BITMAP_TALKH			// Hover
-		, XWIN0_BITMAP_TALKP			// Press
-		, XWIN0_BITMAP_TALKA			// Active
+		, XWIN0_BITMAP_TALKN		// Normal
+		, XWIN0_BITMAP_TALKH		// Hover
+		, XWIN0_BITMAP_TALKP		// Press
+		, XWIN0_BITMAP_TALKA		// Active
 
 		, XWIN0_BITMAP_FRIENDN		// Normal
 		, XWIN0_BITMAP_FRIENDH		// Hover
 		, XWIN0_BITMAP_FRIENDP		// Press
 		, XWIN0_BITMAP_FRIENDA		// Active
 
-		, XWIN0_BITMAP_QUANN			// Normal
-		, XWIN0_BITMAP_QUANH			// Hover
-		, XWIN0_BITMAP_QUANP			// Press
-		, XWIN0_BITMAP_QUANA			// Active
+		, XWIN0_BITMAP_QUANN		// Normal
+		, XWIN0_BITMAP_QUANH		// Hover
+		, XWIN0_BITMAP_QUANP		// Press
+		, XWIN0_BITMAP_QUANA		// Active
 
-		, XWIN0_BITMAP_FAVORITEN		// Normal
-		, XWIN0_BITMAP_FAVORITEH		// Hover
-		, XWIN0_BITMAP_FAVORITEP		// Press
-		, XWIN0_BITMAP_FAVORITEA		// Active
+		, XWIN0_BITMAP_FAVORITEN	// Normal
+		, XWIN0_BITMAP_FAVORITEH	// Hover
+		, XWIN0_BITMAP_FAVORITEP	// Press
+		, XWIN0_BITMAP_FAVORITEA	// Active
 
-		, XWIN0_BITMAP_COINN			// Normal
-		, XWIN0_BITMAP_COINH			// Hover
-		, XWIN0_BITMAP_COINP			// Press
-		, XWIN0_BITMAP_COINA			// Active
+		, XWIN0_BITMAP_COINN		// Normal
+		, XWIN0_BITMAP_COINH		// Hover
+		, XWIN0_BITMAP_COINP		// Press
+		, XWIN0_BITMAP_COINA		// Active
 
-		, XWIN0_BITMAP_FILEN			// Normal
-		, XWIN0_BITMAP_FILEH			// Hover
-		, XWIN0_BITMAP_FILEP			// Press
-		, XWIN0_BITMAP_FILEA			// Active
+		, XWIN0_BITMAP_FILEN		// Normal
+		, XWIN0_BITMAP_FILEH		// Hover
+		, XWIN0_BITMAP_FILEP		// Press
+		, XWIN0_BITMAP_FILEA		// Active
 
 		, XWIN0_BITMAP_SETTINGN		// Normal
 		, XWIN0_BITMAP_SETTINGH		// Hover
@@ -62,32 +61,22 @@ private:
 		, XWIN0_BITMAP_NETWORKH		// Hover
 		, XWIN0_BITMAP_NETWORKP		// Press
 		, XWIN0_BITMAP_NETWORKA		// Active
-
-		, XWIN0_BITMAP_BITCOINN		// Normal
-		, XWIN0_BITMAP_BITCOINH		// Hover
-		, XWIN0_BITMAP_BITCOINP		// Press
-		, XWIN0_BITMAP_BITCOINA		// Active
-
 	};
 
 public:
 	XWindow0()
 	{
 		m_backgroundColor = 0xFF2A2928;
-		m_buttonStartIdx = XWIN0_BUTTON_ME;
 		m_buttonEndIdx = XWIN0_BUTTON_NETWORK;
 		m_property |= (DUI_PROP_MOVEWIN | DUI_PROP_BTNACTIVE);
-		m_message = WM_WIN0_MESSAGE;
+		m_buttonActiveIdx = XWIN0_BUTTON_TALK;
+		m_message = WM_XWINDOWS00;
+		InitButtons();
 	}
+
 	~XWindow0() {}
 
 public:
-	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
-	{
-		int ret = InitButtons();
-		return ret;
-	}
-
 	void UpdateButtonPosition()
 	{
 		int id, bottom;
@@ -113,27 +102,7 @@ public:
 		button->top = button->bottom - bmp->h;
 	}
 
-	void UpdatePosition()
-	{
-		UpdateButtonPosition();
-	}
-
-	int DoSize(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
-	{
-		UpdateButtonPosition();
-		return DUI_STATUS_NEEDRAW;
-	}
-
 private:
-	static int ButtonAction(void* obj, U32 uMsg, U64 wParam, U64 lParam)
-	{
-		int ret = 0;
-		XWindow0* xw = (XWindow0*)obj;
-		if (nullptr != xw)
-			ret = xw->NotifyParent(uMsg, wParam, lParam);
-		return ret;
-	}
-
 	void InitBitmap()
 	{
 		U8 id;
@@ -184,11 +153,6 @@ private:
 		id = XWIN0_BITMAP_NETWORKH;  bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpNetWorkN;  bmp->w = w; bmp->h = h;
 		id = XWIN0_BITMAP_NETWORKP;  bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpNetWorkN;  bmp->w = w; bmp->h = h;
 		id = XWIN0_BITMAP_NETWORKA;  bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpNetWorkN;  bmp->w = w; bmp->h = h;
-
-		id = XWIN0_BITMAP_BITCOINN;  bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpNetWorkN;  bmp->w = w; bmp->h = h;
-		id = XWIN0_BITMAP_BITCOINH;  bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpNetWorkN;  bmp->w = w; bmp->h = h;
-		id = XWIN0_BITMAP_BITCOINP;  bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpNetWorkN;  bmp->w = w; bmp->h = h;
-		id = XWIN0_BITMAP_BITCOINA;  bmp = &m_bitmap[id]; bmp->id = id; bmp->data = (U32*)xbmpNetWorkN;  bmp->w = w; bmp->h = h;
 	}
 
 	int InitButtons()
@@ -200,12 +164,6 @@ private:
 		InitBitmap();
 
 		int	w = XWIN0_WIDTH;
-		for (int i = m_buttonStartIdx; i <= m_buttonEndIdx; i++)
-		{
-			button = &m_button[i];
-			button->pfAction = ButtonAction;
-		}
-		m_buttonActiveIdx = XWIN0_BUTTON_TALK;
 
 		// the position of the buttons is related to the virtual window, not the client area.
 		int id = XWIN0_BUTTON_ME; button = &m_button[id]; button->id = id;
@@ -302,7 +260,6 @@ private:
 		button->property |= XBUTTON_PROP_STATIC;
 		return 0;
 	}
-
 };
 
 #endif  /* __DUI_WINDOW0_H__ */

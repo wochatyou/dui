@@ -68,7 +68,7 @@ public:
 	{
 		m_backgroundColor = DEFAULT_COLOR;
 		m_scrollbarColor = DEFAULT_COLOR;
-		m_message = WM_WIN2_MESSAGE;
+		m_message = WM_XWINDOWS02;
 		m_property |= (DUI_PROP_HASVSCROLL | DUI_PROP_HANDLEVWHEEL);
 	}
 

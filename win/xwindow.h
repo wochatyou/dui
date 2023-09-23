@@ -49,7 +49,6 @@
 #define SPLIT_LEFTALIGNED		0x00000004
 #define SPLIT_BOTTOMLIGNED		0x00000008
 
-#define XWIN_500MS_TIMER		123
 
 wchar_t xtitle[256] = { 0 };
 
@@ -137,6 +136,27 @@ public:
 		m_screenSize = 0;
 	}
 
+	int DoDUIMessageProcess(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr, bool bUpdate = true)
+	{
+		int r = 0;
+		int r0 = m_win0.HandleOSMessage((U32)uMsg, (U64)wParam, (U64)lParam, lpData);
+		int r1 = m_win1.HandleOSMessage((U32)uMsg, (U64)wParam, (U64)lParam, lpData);
+		int r2 = m_win2.HandleOSMessage((U32)uMsg, (U64)wParam, (U64)lParam, lpData);
+		int r3 = m_win3.HandleOSMessage((U32)uMsg, (U64)wParam, (U64)lParam, lpData);
+		int r4 = m_win4.HandleOSMessage((U32)uMsg, (U64)wParam, (U64)lParam, lpData);
+		int r5 = m_win5.HandleOSMessage((U32)uMsg, (U64)wParam, (U64)lParam, lpData);
+
+		if (r0 > 0|| r1 > 0 || r2 > 0 || r3 > 0 || r4 > 0 || r5 > 0)
+			r = 1;
+		else if ((r0 < 0) && (r1 < 0) && (r2 < 0) && (r3 < 0) && (r4 < 0) && (r5 < 0))
+			r = -1;
+
+		if (r > 0 && bUpdate)
+			Invalidate();
+
+		return r;
+	}
+
 	BEGIN_MSG_MAP(XWindow)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
 		MESSAGE_HANDLER(WM_PAINT, OnPaint)
@@ -146,12 +166,12 @@ public:
 		MESSAGE_HANDLER(WM_LBUTTONDOWN, OnLButtonDown)
 		MESSAGE_HANDLER(WM_LBUTTONUP, OnLButtonUp)
 		MESSAGE_HANDLER(WM_LBUTTONDBLCLK, OnLButtonDoubleClick)
-		MESSAGE_HANDLER(WM_WIN0_MESSAGE, OnWin0Message)
-		MESSAGE_HANDLER(WM_WIN1_MESSAGE, OnWin1Message)
-		MESSAGE_HANDLER(WM_WIN2_MESSAGE, OnWin2Message)
-		MESSAGE_HANDLER(WM_WIN3_MESSAGE, OnWin3Message)
-		MESSAGE_HANDLER(WM_WIN4_MESSAGE, OnWin4Message)
-		MESSAGE_HANDLER(WM_WIN5_MESSAGE, OnWin5Message)
+		MESSAGE_HANDLER(WM_XWINDOWS00, OnWin0Message)
+		MESSAGE_HANDLER(WM_XWINDOWS01, OnWin1Message)
+		MESSAGE_HANDLER(WM_XWINDOWS02, OnWin2Message)
+		MESSAGE_HANDLER(WM_XWINDOWS03, OnWin3Message)
+		MESSAGE_HANDLER(WM_XWINDOWS04, OnWin4Message)
+		MESSAGE_HANDLER(WM_XWINDOWS05, OnWin5Message)
 		MESSAGE_HANDLER(WM_CAPTURECHANGED, OnCaptureChanged)
 		MESSAGE_HANDLER(WM_KEYDOWN, OnKeyDown)
 		MESSAGE_HANDLER(WM_CHAR, OnChar)
@@ -161,7 +181,7 @@ public:
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
 		MESSAGE_HANDLER(WM_MOUSEACTIVATE, OnMouseActivate)
 		MESSAGE_HANDLER(WM_SETFOCUS, OnSetFocus)
-		MESSAGE_HANDLER(WM_REDRAW_WINDOW, OnRedrawWindow)
+		MESSAGE_HANDLER(WM_XWINDOWSPAINT, OnDrawWindow)
 		MESSAGE_HANDLER(WM_CREATE, OnCreate)
 		MESSAGE_HANDLER(WM_DESTROY, OnDestroy)
 	END_MSG_MAP()
@@ -173,11 +193,13 @@ public:
 
 	LRESULT OnWin0Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		U8 buttonId = (U8)wParam;
 		return 0; 
 	}
 
 	LRESULT OnWin1Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		U8 buttonId = (U8)wParam;
 		return 0;
 	}
 
@@ -188,6 +210,7 @@ public:
 
 	LRESULT OnWin3Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		U8 buttonId = (U8)wParam;
 		return 0;
 	}
 
@@ -198,10 +221,11 @@ public:
 
 	LRESULT OnWin5Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		U8 buttonId = (U8)wParam;
 		return 0;
 	}
 
-	LRESULT OnRedrawWindow(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
+	LRESULT OnDrawWindow(UINT /*uMsg*/, WPARAM /*wParam*/, LPARAM /*lParam*/, BOOL& /*bHandled*/)
 	{
 		Invalidate();
 		//UpdateWindow();
@@ -210,61 +234,37 @@ public:
 
 	LRESULT OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		KillTimer(XWIN_500MS_TIMER);
-
-		m_win0.OnDestroy(uMsg, wParam, lParam);
-		m_win1.OnDestroy(uMsg, wParam, lParam);
-		m_win2.OnDestroy(uMsg, wParam, lParam);
-		m_win3.OnDestroy(uMsg, wParam, lParam);
-		m_win4.OnDestroy(uMsg, wParam, lParam);
-		m_win5.OnDestroy(uMsg, wParam, lParam);
-
+		KillTimer(XWIN_666MS_TIMER);
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		SafeRelease(&m_pixelBitmap);
 		SafeRelease(&m_pD2DRenderTarget);
-
 		PostQuitMessage(0);
-
 		return 0;
 	}
 
 	LRESULT OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		int r;
 		HRESULT hr;
 		int r0 = 0, r1 = 0, r2 = 0, r3 = 0, r4 = 0, r5 = 0;
 
 		m_nDPI = GetDpiForWindow(m_hWnd);
 		
-		r0 = m_win0.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r1 = m_win1.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r2 = m_win2.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r3 = m_win3.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r4 = m_win4.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-		r5 = m_win5.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
-
-		if (r0 || r1 || r2 || r3 || r4 || r5)
+		r = DoDUIMessageProcess(uMsg, (WPARAM)m_hWnd, lParam);
+		r = (r > 0) ? r : 0;
+		if (r)
 		{
 			MessageBox(_T("WM_CREATE failed!"), _T("Error"), MB_OK);
 			PostMessage(WM_CLOSE);
 			return 0;
 		}
-
-		SetTimer(XWIN_500MS_TIMER, 600);
-
+		SetTimer(XWIN_666MS_TIMER, 666);
 		return 0;
 	}
 
 	LRESULT OnTimer(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		int r0 = m_win0.OnTimer(uMsg, wParam, lParam);
-		int r1 = m_win1.OnTimer(uMsg, wParam, lParam);
-		int r2 = m_win2.OnTimer(uMsg, wParam, lParam);
-		int r3 = m_win3.OnTimer(uMsg, wParam, lParam);
-		int r4 = m_win4.OnTimer(uMsg, wParam, lParam);
-		int r5 = m_win5.OnTimer(uMsg, wParam, lParam);
-
-		if(r0 || r1 || r2 || r3 || r4 || r5)
-			Invalidate();
-
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 
@@ -294,11 +294,8 @@ public:
 				bHandled = TRUE;
 			else
 			{
-				int r1 = m_win1.OnSetCursor(uMsg, ptPos.x, ptPos.y);
-				int r4 = m_win4.OnSetCursor(uMsg, ptPos.x, ptPos.y);
-				int r5 = m_win5.OnSetCursor(uMsg, ptPos.x, ptPos.y);
-
-				if(r1 || r4 || r5)
+				int r = DoDUIMessageProcess(uMsg, (WPARAM)ptPos.x, (LPARAM)ptPos.y, nullptr, false);
+				if (r > 0)
 					bHandled = TRUE;
 			}
 		}
@@ -337,12 +334,7 @@ public:
 		m_screenBuff = (U32*)VirtualAlloc(NULL, m_screenSize, MEM_COMMIT, PAGE_READWRITE);
 		if (nullptr == m_screenBuff)
 		{
-			m_win0.OnSize(uMsg, wParam, 0, nullptr);
-			m_win1.OnSize(uMsg, wParam, 0, nullptr);
-			m_win2.OnSize(uMsg, wParam, 0, nullptr);
-			m_win3.OnSize(uMsg, wParam, 0, nullptr);
-			m_win4.OnSize(uMsg, wParam, 0, nullptr);
-			m_win5.OnSize(uMsg, wParam, 0, nullptr);
+			DoDUIMessageProcess(uMsg, wParam, 0);
 			Invalidate();
 			return 0;
 		}
@@ -530,6 +522,7 @@ public:
 	
 	LRESULT OnMouseWheel(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		int r;
 		POINT pt;
 		pt.x = GET_X_LPARAM(lParam);
 		pt.y = GET_Y_LPARAM(lParam);
@@ -537,29 +530,15 @@ public:
 		// convert screen coordinates to window coordinate
 		ScreenToClient(&pt);
 		lParam = MAKELONG(pt.x, pt.y);
-
-		int needReDraw0 = m_win0.OnMouseWheel(uMsg, wParam, lParam);
-		int needReDraw1 = m_win1.OnMouseWheel(uMsg, wParam, lParam);
-		int needReDraw2 = m_win2.OnMouseWheel(uMsg, wParam, lParam);
-		int needReDraw3 = m_win3.OnMouseWheel(uMsg, wParam, lParam);
-		int needReDraw4 = m_win4.OnMouseWheel(uMsg, wParam, lParam);
-		int needReDraw5 = m_win5.OnMouseWheel(uMsg, wParam, lParam);
-
-		if (needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
-			Invalidate();
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 
 		return 0;
 	}
 
 	LRESULT OnMouseMove(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		int r = 0;
 		int needReDrawX = 0;
-		int needReDraw0 = 0;
-		int needReDraw1 = 0;
-		int needReDraw2 = 0;
-		int needReDraw3 = 0;
-		int needReDraw4 = 0;
-		int needReDraw5 = 0;
 
 		int xPos = GET_X_LPARAM(lParam);
 		int yPos = GET_Y_LPARAM(lParam);
@@ -625,16 +604,9 @@ public:
 		}
 
 		if (DrapMode::dragModeNone == m_dragMode)
-		{
-			needReDraw0 = m_win0.OnMouseMove(uMsg, wParam, lParam);
-			needReDraw1 = m_win1.OnMouseMove(uMsg, wParam, lParam);
-			needReDraw2 = m_win2.OnMouseMove(uMsg, wParam, lParam);
-			needReDraw3 = m_win3.OnMouseMove(uMsg, wParam, lParam);
-			needReDraw4 = m_win4.OnMouseMove(uMsg, wParam, lParam);
-			needReDraw5 = m_win5.OnMouseMove(uMsg, wParam, lParam);
-		}
+			r = DoDUIMessageProcess(uMsg, wParam, lParam, nullptr, false);
 
-		if (needReDrawX || needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
+		if (r > 0 || needReDrawX)
 			Invalidate();
 
 		return 0;
@@ -679,15 +651,7 @@ public:
 
 		if (DrapMode::dragModeNone == m_dragMode)
 		{
-			int needReDraw0 = m_win0.OnLButtonDown(uMsg, wParam, lParam);
-			int needReDraw1 = m_win1.OnLButtonDown(uMsg, wParam, lParam);
-			int needReDraw2 = m_win2.OnLButtonDown(uMsg, wParam, lParam);
-			int needReDraw3 = m_win3.OnLButtonDown(uMsg, wParam, lParam);
-			int needReDraw4 = m_win4.OnLButtonDown(uMsg, wParam, lParam);
-			int needReDraw5 = m_win5.OnLButtonDown(uMsg, wParam, lParam);
-
-			if (needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
-				Invalidate();
+			DoDUIMessageProcess(uMsg, wParam, lParam);
 		}
 
 		return 0;
@@ -695,13 +659,6 @@ public:
 
 	LRESULT OnLButtonUp(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		int needReDraw0;
-		int needReDraw1;
-		int needReDraw2;
-		int needReDraw3;
-		int needReDraw4;
-		int needReDraw5;
-
 		if(::GetCapture() == m_hWnd)
 		{
 			switch (m_dragMode)
@@ -720,15 +677,7 @@ public:
 
 		m_dragMode = DrapMode::dragModeNone;
 
-		needReDraw0 = m_win0.OnLButtonUp(uMsg, wParam, lParam);
-		needReDraw1 = m_win1.OnLButtonUp(uMsg, wParam, lParam);
-		needReDraw2 = m_win2.OnLButtonUp(uMsg, wParam, lParam);
-		needReDraw3 = m_win3.OnLButtonUp(uMsg, wParam, lParam);
-		needReDraw4 = m_win4.OnLButtonUp(uMsg, wParam, lParam);
-		needReDraw5 = m_win5.OnLButtonUp(uMsg, wParam, lParam);
-
-		if (needReDraw0 || needReDraw1 || needReDraw2 || needReDraw3 || needReDraw4 || needReDraw5)
-			Invalidate();
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 
 		return 0;
 	}
@@ -754,7 +703,6 @@ public:
 			{
 				m_splitterVPosOld = (m_rectClient.right - m_rectClient.left) - m_splitterVPos;
 			}
-			UpdateSplitterLayout();
 			UpdateWindow();
 		}
 		// m_splitterHPos may <= 0 which means window 5 is hidden
@@ -772,7 +720,6 @@ public:
 			{
 				m_splitterHPosOld = m_splitterHPos;
 			}
-			UpdateSplitterLayout();
 			UpdateWindow();
 		}
 
@@ -787,15 +734,7 @@ public:
 
 	LRESULT OnChar(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		int r0 = m_win0.OnChar(uMsg, wParam, lParam);
-		int r1 = m_win1.OnChar(uMsg, wParam, lParam);
-		int r2 = m_win2.OnChar(uMsg, wParam, lParam);
-		int r3 = m_win3.OnChar(uMsg, wParam, lParam);
-		int r4 = m_win4.OnChar(uMsg, wParam, lParam);
-		int r5 = m_win5.OnChar(uMsg, wParam, lParam);
-
-		if (r0 || r1 || r2 || r3 || r4 || r5)
-			Invalidate();
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 
@@ -853,15 +792,7 @@ public:
 		}
 		else
 		{
-			int r0 = m_win0.OnKeyPress(uMsg, wParam, lParam);
-			int r1 = m_win1.OnKeyPress(uMsg, wParam, lParam);
-			int r2 = m_win2.OnKeyPress(uMsg, wParam, lParam);
-			int r3 = m_win3.OnKeyPress(uMsg, wParam, lParam);
-			int r4 = m_win4.OnKeyPress(uMsg, wParam, lParam);
-			int r5 = m_win5.OnKeyPress(uMsg, wParam, lParam);
-
-			if (r0 || r1 || r2 || r3 || r4 || r5)
-				Invalidate();
+			DoDUIMessageProcess(uMsg, wParam, lParam);
 		}
 
 		return 0;
@@ -1204,37 +1135,6 @@ public:
 		return bRet;
 	}
 
-	void UpdateSplitterLayout()
-	{
-#if 0
-		if((m_nSinglePane == SPLIT_PANE_NONE) && (m_splitterVPos == -1))
-			return;
-
-		RECT rect = {};
-		if(m_nSinglePane == SPLIT_PANE_NONE)
-		{
-			if(GetSplitterBarRect(&rect))
-				InvalidateRect(&rect);
-#if 0
-			for(int nPane = 0; nPane < m_nPanesCount; nPane++)
-			{
-				if(GetSplitterPaneRect(nPane, &rect))
-				{
-					InvalidateRect(&rect);
-				}
-			}
-#endif
-		}
-		else
-		{
-			if(GetSplitterPaneRect(m_nSinglePane, &rect))
-			{
-				InvalidateRect(&rect);
-			}
-		}
-#endif
-	}
-
 	bool IsOverSplitterRect(int x, int y) const
 	{
 		// -1 == don't check
@@ -1256,10 +1156,9 @@ public:
 			if ((x > m_splitterVPos + SPLITLINE_WIDTH) && (y >= m_splitterHPos) && (y < (m_splitterHPos + SPLITLINE_WIDTH)))
 				return DrapMode::dragModeH;
 		}
-		
+	
 		return DrapMode::dragModeNone;
 	}
-
 };
 
 #endif /* __WOCHAT_XWINDOW_H__ */

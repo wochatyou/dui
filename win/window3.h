@@ -33,10 +33,9 @@ public:
 	XWindow3()
 	{
 		m_backgroundColor = 0xFFF5F5F5;
-		m_buttonStartIdx = XWIN3_BUTTON_DOT;
 		m_buttonEndIdx = XWIN3_BUTTON_DOT;
 		m_property |= DUI_PROP_MOVEWIN;
-		m_message = WM_WIN3_MESSAGE;
+		m_message = WM_XWINDOWS03;
 	}
 
 	~XWindow3()

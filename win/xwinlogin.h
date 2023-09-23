@@ -35,27 +35,27 @@ class XDUILogin : public XWindowT <XDUILogin>
 		, XWIN6_BITMAP_CREATEA
 	};
 
-	// cairo/harfbuzz issue to cache to speed up
-	cairo_font_extents_t m_font_extents = { 0 };
-	cairo_glyph_t* m_cairo_glyphs = nullptr;
-	cairo_font_face_t* m_cairo_face = nullptr;
-	hb_font_t* m_hb_font0 = nullptr;
-	hb_font_t* m_hb_font1 = nullptr;
-	hb_buffer_t* m_hb_buffer = nullptr;
-
 public:
 	XDUILogin()
 	{
 		m_backgroundColor = 0xFFCC5356;
-		m_message = WM_WIN6_MESSAGE;
-		m_property |= DUI_PROP_MOVEWIN;
-		m_buttonStartIdx = XWIN6_BUTTON_LOGIN;
 		m_buttonEndIdx = XWIN6_BUTTON_CREATE;
+		m_message = WM_XWINDOWS00;
+		m_property |= (DUI_PROP_MOVEWIN | DUI_PROP_HANDLETIMER | DUI_PROP_HANDLEKEYBOARD);
+
+		m_editName.SetProperty(XEDIT_PROP_ABCD123);
+		m_editPasswd.SetProperty(XEDIT_PROP_PASSWORD);
+
+		m_editName.SetBitmap((U32*)xbmpEditUname, 50, 19);
+		m_editPasswd.SetBitmap((U32*)xbmpEditPasswd, 34, 19);
 
 		InitButtons();
 	}
 
 	~XDUILogin() {}
+
+	XEditBoxSL m_editName;
+	XEditBoxSL m_editPasswd;
 
 	void InitBitmap()
 	{
@@ -80,7 +80,6 @@ public:
 		U8 id;
 		XButton* button;
 		XBitmap* bitmap;
-
 		InitBitmap(); // inital all bitmap resource
 
 		// Initialize All buttons
@@ -107,8 +106,9 @@ public:
 
 	void UpdateButtonPosition()
 	{
-		int id, margin;
-		int gap = 20; // pixel
+		int id, margin, L, T, R, B;
+		int gap = 30; // pixel
+		int lineH;
 		XButton* button;
 		XButton* buttonPrev;
 		XBitmap* bmp;
@@ -116,41 +116,268 @@ public:
 		int w = m_area.right - m_area.left;
 		int h = m_area.bottom - m_area.top;
 
-		id = XWIN6_BUTTON_CREATE;  button = &m_button[id]; bmp = button->imgNormal;
+		id = XWIN6_BUTTON_LOGIN;  button = &m_button[id]; bmp = button->imgNormal;
 		margin = (w - bmp->w) >> 1;
-		button->bottom = h - gap;
-		button->top = button->bottom - bmp->h;
+		lineH = m_editName.GetLineHeight();
+		L = (margin >> 1); R = L + (w - margin);
+		T = gap; B = T + ((lineH >= bmp->h) ? lineH : bmp->h);
+		m_editName.UpdatePosition(L, T, R, B);
+
+		lineH = m_editPasswd.GetLineHeight();
+		T = B + gap; B = T + ((lineH >= bmp->h) ? lineH : bmp->h);
+		m_editPasswd.UpdatePosition(L, T, R, B);
+
+		button->top = B + gap;
+		button->bottom = button->top + bmp->h;
 		button->left = margin;
 		button->right = button->left + bmp->w;
 		buttonPrev = button;
 
-		id = XWIN6_BUTTON_LOGIN;  button = &m_button[id]; bmp = button->imgNormal;
+		gap >>= 1;
+		id = XWIN6_BUTTON_CREATE;  button = &m_button[id]; bmp = button->imgNormal;
 		button->left = margin;
 		button->right = button->left + bmp->w;
-		button->bottom = buttonPrev->top - gap;
-		button->top = button->bottom - bmp->h;
+		button->top = buttonPrev->bottom + gap;
+		button->bottom = button->top + bmp->h;
 	}
 
-	void UpdatePosition()
+	int DoCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
 	{
-		UpdateButtonPosition();
+		assert(nullptr != g_ftFace2);
+		int r0 = m_editName.Init(g_ftFace2);
+		int r1 = m_editPasswd.Init(g_ftFace2);
+		return (r0 | r1);
 	}
 
-	int DoSize(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr)
+	int DoDestroy(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		UpdateButtonPosition();
+		m_editName.Term();
+		m_editPasswd.Term();
 		return 0;
 	}
 
-	static int ButtonAction(void* obj, U32 uMsg, U64 wParam, U64 lParam)
+	int DoMouseMove(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
 	{
-		int ret = 0;
-		XDUILogin* xw = (XDUILogin*)obj;
-		if (nullptr != xw)
-			ret = xw->NotifyParent(uMsg, wParam, lParam);
-		return ret;
+		int r = DUI_STATUS_NODRAW;
+		int r0 = DUI_STATUS_NODRAW;
+		int r1 = DUI_STATUS_NODRAW;
+		int xPos = GET_X_LPARAM(lParam);
+		int yPos = GET_Y_LPARAM(lParam);
+
+		// transfer the coordination from real window to local virutal window
+		xPos -= m_area.left;
+		yPos -= m_area.top;
+
+		if (m_editName.IsHitted(xPos, yPos))
+		{
+			SetCursorIBeam();
+			r0 = m_editName.SetState(XEditStatus::XEDIT_STATUS_HOVER);
+		}
+		else
+			r0 = m_editName.UnSetState(XEditStatus::XEDIT_STATUS_HOVER);
+
+		if (m_editPasswd.IsHitted(xPos, yPos))
+		{
+			SetCursorIBeam();
+			r1 = m_editPasswd.SetState(XEditStatus::XEDIT_STATUS_HOVER);
+		}
+		else
+			r1 = m_editPasswd.UnSetState(XEditStatus::XEDIT_STATUS_HOVER);
+
+		if (r0 || r1)
+			r = DUI_STATUS_NEEDRAW;
+
+		return r;
 	}
 
+	int DoLButtonDown(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		int r = DUI_STATUS_NODRAW;
+		int r0 = DUI_STATUS_NODRAW;
+		int r1 = DUI_STATUS_NODRAW;
+		int xPos = GET_X_LPARAM(lParam);
+		int yPos = GET_Y_LPARAM(lParam);
+
+		// transfer the coordination from real window to local virutal window
+		xPos -= m_area.left;
+		yPos -= m_area.top;
+
+		if (m_editName.IsHitted(xPos, yPos))
+		{
+			SetCursorIBeam();
+			r0 = m_editName.SetFocusedStatus();
+		}
+		else
+			r0 = m_editName.ClearFocusedStatus();
+
+		if (m_editPasswd.IsHitted(xPos, yPos))
+		{
+			SetCursorIBeam();
+			r1 = m_editPasswd.SetFocusedStatus();
+		}
+		else
+			r1 = m_editPasswd.ClearFocusedStatus();
+
+		if (r0 || r1)
+			r = DUI_STATUS_NEEDRAW;
+
+		return r;
+	}
+
+	int DoSetCursor(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		int xPos = (int)wParam;
+		int yPos = (int)lParam;
+
+		xPos -= m_area.left;
+		yPos -= m_area.top;
+
+		if (m_editName.IsHitted(xPos, yPos) || m_editPasswd.IsHitted(xPos, yPos))
+		{
+			return 1;
+		}
+		return 0;
+	}
+
+	int DoFocusGet(U32 uMsg, int xPos, int yPos, void* lpData = nullptr)
+	{
+		bool isFocused;
+		int rn = DUI_STATUS_NODRAW;
+		int rp = DUI_STATUS_NODRAW;
+
+		xPos -= m_area.left;
+		yPos -= m_area.top;
+
+		rn = m_editName.ClearFocusedStatus();
+		if (m_editName.IsHitted(xPos, yPos))
+		{
+			assert(DUI_STATUS_ISFOCUS & m_status);
+			rn = m_editName.SetFocusedStatus();
+		}
+		rp = m_editPasswd.ClearFocusedStatus();
+		if (m_editPasswd.IsHitted(xPos, yPos))
+		{
+			assert(DUI_STATUS_ISFOCUS & m_status);
+			rp = m_editPasswd.SetFocusedStatus();
+		}
+
+		return (rn | rp);
+	}
+
+	int DoFocusLose(U32 uMsg, int xPos, int yPos, void* lpData = nullptr)
+	{
+#if 0
+		m_editBox.ClearFocusedStatus();
+#endif
+		return DUI_STATUS_NEEDRAW;
+	}
+
+	int DoChar(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		int r = DUI_STATUS_NODRAW;
+		U16 charCode = static_cast<U16>(wParam);
+
+		if (m_editName.IsFocused())
+		{
+			r = m_editName.OnAddOneChar(charCode);
+		}
+		else if (m_editPasswd.IsFocused())
+		{
+			r = m_editPasswd.OnAddOneChar(charCode);
+		}
+
+		return r;
+	}
+
+	int DoTimer(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		int r = DUI_STATUS_NODRAW;
+
+		if (m_editName.IsFocused())
+		{
+			m_editName.FlipCaret();
+			r = DUI_STATUS_NEEDRAW;
+		}
+		if (m_editPasswd.IsFocused())
+		{
+			m_editPasswd.FlipCaret();
+			r = DUI_STATUS_NEEDRAW;
+		}
+		return r;
+	}
+
+	int DoKeyPress(U32 uMsg, U64 wParam, U64 lParam, void* lpData = nullptr)
+	{
+		int rx = DUI_STATUS_NODRAW;
+		int rn = DUI_STATUS_NODRAW;
+		int rp = DUI_STATUS_NODRAW;
+
+		U32 keyCode = static_cast<U32>(wParam);
+
+		bool heldShift = (GetKeyState(VK_SHIFT) & 0x80) != 0;
+		bool heldControl = (GetKeyState(VK_CONTROL) & 0x80) != 0;
+
+		switch (keyCode)
+		{
+		case VK_LEFT:
+			rn = m_editName.MoveCursorLR(-1);
+			rp = m_editPasswd.MoveCursorLR(-1);
+			break;
+		case VK_RIGHT:
+			rn = m_editName.MoveCursorLR(1);
+			rp = m_editPasswd.MoveCursorLR(1);
+			break;
+		case VK_BACK:
+		case VK_RETURN:
+		case VK_DELETE:
+		case VK_TAB:
+		case VK_UP:
+		case VK_DOWN:
+		case VK_HOME:
+		case VK_END:
+		case VK_INSERT:
+		case 'C':
+		case 'X':
+		case 'A':
+		case 'V':
+		default:
+			break;
+		}
+
+		if (DUI_STATUS_NODRAW != rn || DUI_STATUS_NODRAW != rp)
+			rx = DUI_STATUS_NEEDRAW;
+		return rx;
+	}
+
+
+	int Draw() 
+	{ 
+		int w = m_area.right - m_area.left;
+		int h = m_area.bottom - m_area.top;
+
+		if (m_editName.HasData())
+		{
+			int sw = m_editName.GetWidth();
+			int sh = m_editName.GetHeight();
+			int dx = m_editName.GetLeftPos();
+			int dy = m_editName.GetTopPos();
+			m_editName.Draw();
+			U32* editBuf = m_editName.GetDrawBuffer();
+			assert(nullptr != editBuf);
+			ScreenDrawRect(m_screen, w, h, editBuf, sw, sh, dx, dy);
+
+			sw = m_editPasswd.GetWidth();
+			sh = m_editPasswd.GetHeight();
+			dx = m_editPasswd.GetLeftPos();
+			dy = m_editPasswd.GetTopPos();
+			m_editPasswd.Draw();
+			editBuf = m_editPasswd.GetDrawBuffer();
+			assert(nullptr != editBuf);
+			ScreenDrawRect(m_screen, w, h, editBuf, sw, sh, dx, dy);
+
+		}
+		return 0; 
+	}
 };
 
 
@@ -193,6 +420,17 @@ public:
 		return m_bSuccessful; 
 	}
 
+	int DoDUIMessageProcess(UINT uMsg, WPARAM wParam, LPARAM lParam, void* lpData = nullptr, bool bUpdate = true)
+	{
+		int r = m_loginWin.HandleOSMessage((U32)uMsg, (U64)wParam, (U64)lParam, lpData);
+
+		if (r > 0 && bUpdate)
+			Invalidate();
+
+		return r;
+	}
+
+
 	BEGIN_MSG_MAP(XWinLogin)
 		MESSAGE_HANDLER(WM_ERASEBKGND, OnEraseBkgnd)
 		MESSAGE_HANDLER(WM_PAINT, OnPaint)
@@ -201,7 +439,7 @@ public:
 		MESSAGE_HANDLER(WM_MOUSEWHEEL, OnMouseWheel)
 		MESSAGE_HANDLER(WM_LBUTTONDOWN, OnLButtonDown)
 		MESSAGE_HANDLER(WM_LBUTTONUP, OnLButtonUp)
-		MESSAGE_HANDLER(WM_WIN6_MESSAGE, OnWin6Message)
+		MESSAGE_HANDLER(WM_XWINDOWS00, OnWin0Message)
 		MESSAGE_HANDLER(WM_LBUTTONDBLCLK, OnLButtonDoubleClick)
 		MESSAGE_HANDLER(WM_CAPTURECHANGED, OnCaptureChanged)
 		MESSAGE_HANDLER(WM_KEYDOWN, OnKeyDown)
@@ -223,7 +461,9 @@ public:
 
 	LRESULT OnDestroy(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		m_loginWin.OnDestroy(uMsg, wParam, lParam);
+		KillTimer(XWIN_666MS_TIMER);
+
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		SafeRelease(&m_pixelBitmap);
 		SafeRelease(&m_pD2DRenderTarget);
 		PostQuitMessage(0);
@@ -233,22 +473,27 @@ public:
 
 	LRESULT OnCreate(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		int r = m_loginWin.OnCreate(uMsg, (WPARAM)m_hWnd, lParam);
+		int r = DoDUIMessageProcess(uMsg, (WPARAM)m_hWnd, lParam);
+		r = (r > 0) ? r : 0;
 		if (r)
 		{
 			MessageBox(_T("WM_CREATE failed!"), _T("Error"), MB_OK);
 			PostMessage(WM_CLOSE);
 			return 0;
 		}
+
+		SetTimer(XWIN_666MS_TIMER, 666);
+
 		return 0;
 	}
 
 	LRESULT OnTimer(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 
-	LRESULT OnWin6Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
+	LRESULT OnWin0Message(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
 		U8 buttonId = (U8)wParam;
 
@@ -256,7 +501,6 @@ public:
 		{
 			m_bSuccessful = true;
 		}
-
 		PostMessage(WM_CLOSE);
 
 		return 0;
@@ -278,14 +522,13 @@ public:
 		if (((HWND)wParam == m_hWnd) && (LOWORD(lParam) == HTCLIENT))
 		{
 			DWORD dwPos = ::GetMessagePos();
-
 			POINT ptPos = { GET_X_LPARAM(dwPos), GET_Y_LPARAM(dwPos) };
-
 			ScreenToClient(&ptPos);
-			int r = m_loginWin.OnSetCursor(uMsg, ptPos.x, ptPos.y);
-			if (r)
-				bHandled = FALSE;
+			int r = DoDUIMessageProcess(uMsg, (WPARAM)ptPos.x, (LPARAM)ptPos.y, nullptr, false);
+			if (r > 0)
+				bHandled = TRUE;
 		}
+
 		return 0;
 	}
 
@@ -336,33 +579,26 @@ public:
 
 	LRESULT OnMouseWheel(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 
 	LRESULT OnMouseMove(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		int r = m_loginWin.OnMouseMove(uMsg, wParam, lParam);
-		if (r)
-			Invalidate();
-
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 
 	LRESULT OnLButtonDown(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		int r = m_loginWin.OnLButtonDown(uMsg, wParam, lParam);
-		if (r)
-			Invalidate();
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 
 		return 0;
 	}
 
 	LRESULT OnLButtonUp(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
-		int r = m_loginWin.OnLButtonUp(uMsg, wParam, lParam);
-		if (r)
-			Invalidate();
-
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 
@@ -378,11 +614,13 @@ public:
 
 	LRESULT OnChar(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 
 	LRESULT OnKeyDown(UINT uMsg, WPARAM wParam, LPARAM lParam, BOOL& bHandled)
 	{
+		DoDUIMessageProcess(uMsg, wParam, lParam);
 		return 0;
 	}
 

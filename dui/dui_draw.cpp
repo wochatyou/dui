@@ -1,3 +1,4 @@
+#if 0
 // dear imgui, v1.90 WIP
 // (drawing and font code)
 
@@ -4272,3 +4273,4 @@ static const char* GetDefaultCompressedFontDataTTFBase85()
     return proggy_clean_ttf_compressed_data_base85;
 }
 
+#endif

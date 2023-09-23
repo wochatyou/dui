@@ -1,6 +1,7 @@
 #ifndef __DUI_INTERNAL_H__
 #define __DUI_INTERNAL_H__
 
+#if 0
 // dear imgui, v1.90 WIP
 // (internal structures/api)
 
@@ -3418,6 +3419,6 @@ extern const char* ImGuiTestEngine_FindItemDebugLabel(ImGuiContext* ctx, ImGuiID
 #ifdef _MSC_VER
 #pragma warning (pop)
 #endif
-
+#endif
 
 #endif // __DUI_INTERNAL_H__
