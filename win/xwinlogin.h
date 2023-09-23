@@ -43,8 +43,8 @@ public:
 		m_message = WM_XWINDOWS00;
 		m_property |= (DUI_PROP_MOVEWIN | DUI_PROP_HANDLETIMER | DUI_PROP_HANDLEKEYBOARD);
 
-		m_editName.SetProperty(XEDIT_PROP_ABCD123);
-		m_editPasswd.SetProperty(XEDIT_PROP_PASSWORD);
+		m_editName.SetProperty(XEDIT_PROP_ASCIIONLY);
+		m_editPasswd.SetProperty(XEDIT_PROP_PASSWORD|XEDIT_PROP_ASCIIONLY);
 
 		m_editName.SetBitmap((U32*)xbmpEditUname, 50, 19);
 		m_editPasswd.SetBitmap((U32*)xbmpEditPasswd, 34, 19);

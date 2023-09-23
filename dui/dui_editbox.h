@@ -47,7 +47,7 @@ static U8 asciiTab[128] = {
 
 #define XEDIT_PROP_NONE         0x00
 #define XEDIT_PROP_PASSWORD     0x01
-#define XEDIT_PROP_ABCD123      0x02
+#define XEDIT_PROP_ASCIIONLY    0x02
 
 enum class XEditStatus
 {
@@ -374,7 +374,9 @@ public:
         U16 charNum = m_textChar[0];
         if (charNum < DUI_MAX_EDITSTRING)
         {
-            isAllowed = asciiTab[ascII];
+            if (XEDIT_PROP_ASCIIONLY & m_property)
+                isAllowed = asciiTab[ascII];
+            else isAllowed = 1;
             if (0 != isAllowed)
             {
                 charNum++;
